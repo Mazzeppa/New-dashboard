@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+:root {
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --surface-2: #f0f0ed;
+  --border: #e2e2dd;
+  --fg: #1b1b18;
+  --muted: #6b6b63;
+  --accent: #1f5f8b;
+  --accent-fg: #ffffff;
+  --ok: #2e7d4f;
+  --warn: #b26a00;
+  --danger: #b3261e;
+  --ok-bg: #e7f3ec;
+  --warn-bg: #fdf1dc;
+  --danger-bg: #fbe9e7;
+}
+
+.dark {
+  --bg: #121311;
+  --surface: #1b1c1a;
+  --surface-2: #242522;
+  --border: #33352f;
+  --fg: #e9e9e4;
+  --muted: #9c9c93;
+  --accent: #6aaed6;
+  --accent-fg: #0e1a22;
+  --ok: #6cc293;
+  --warn: #e3a64a;
+  --danger: #f08a80;
+  --ok-bg: #1d2e24;
+  --warn-bg: #33281a;
+  --danger-bg: #3a2220;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-border: var(--border);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-danger: var(--danger);
+  --color-ok-bg: var(--ok-bg);
+  --color-warn-bg: var(--warn-bg);
+  --color-danger-bg: var(--danger-bg);
+  --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-feature-settings: "tnum";
+}
+
+/* 숫자 열 정렬 */
+.num {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
