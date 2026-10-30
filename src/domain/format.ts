@@ -36,7 +36,8 @@ export function formatAmount(value: number | null | undefined, currency: string)
   const abs = Math.abs(value);
   if (currency === "KRW") {
     if (abs >= JO) return `${sign}${num(abs / JO, 2)}조원`;
-    if (abs >= EOK) return `${sign}${num(abs / EOK, 0)}억원`;
+    // 100억 미만은 소수 둘째 자리까지 (1.36억원), 그 이상은 정수 (5,234억원)
+    if (abs >= EOK) return `${sign}${num(abs / EOK, abs < 100 * EOK ? 2 : 0)}억원`;
     return `${sign}${num(abs, 0)}원`;
   }
   const sym = SYMBOL[currency] ?? `${currency} `;

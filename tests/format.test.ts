@@ -7,6 +7,8 @@ describe("formatAmount", () => {
     expect(formatAmount(98_765_000_000, "KRW")).toBe("988억원");
     expect(formatAmount(523_400_000_000, "KRW")).toBe("5,234억원");
     expect(formatAmount(-300_000_000, "KRW")).toBe("-3억원");
+    expect(formatAmount(135_840_000, "KRW")).toBe("1.36억원");
+    expect(formatAmount(9_950_000_000, "KRW")).toBe("99.5억원");
     expect(formatAmount(12_345, "KRW")).toBe("12,345원");
   });
 

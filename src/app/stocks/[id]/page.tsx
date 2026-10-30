@@ -5,6 +5,9 @@ import { DeleteStockButton } from "@/components/stocks/delete-stock-button";
 import { AnalysisTab } from "@/components/analysis/analysis-tab";
 import { StockChecklists } from "@/components/analysis/stock-checklists";
 import { ValuationTab } from "@/components/valuation/valuation-tab";
+import { MemoTab } from "@/components/memo/memo-tab";
+import { TradesTab } from "@/components/trades/trades-tab";
+import { TagEditor } from "@/components/stocks/tag-editor";
 import { Badge, Card, CardHeader, EmptyState } from "@/components/ui";
 import { FilterChecklist } from "@/components/stocks/filter-checklist";
 import { PricePanel } from "@/components/stocks/price-panel";
@@ -18,6 +21,8 @@ import {
   listFilterItems,
   listFilterResults,
   listPrices,
+  listTags,
+  stockTagNames,
   listTemplates,
   listTransitions,
 } from "@/db/queries";
@@ -34,8 +39,8 @@ const TABS = [
   { key: "analysis", label: "심층 분석" },
   { key: "checklists", label: "체크리스트" },
   { key: "valuation", label: "가치평가" },
-  { key: "memo", label: "투자 메모", soon: 5 },
-  { key: "trades", label: "매매·비중", soon: 5 },
+  { key: "memo", label: "투자 메모" },
+  { key: "trades", label: "매매·비중" },
   { key: "reviews", label: "보유 점검", soon: 6 },
   { key: "retro", label: "복기", soon: 6 },
 ] as const;
@@ -115,6 +120,8 @@ export default async function StockPage({
         />
       )}
       {tab === "valuation" && <ValuationTab stock={stock} />}
+      {tab === "memo" && <MemoTab stock={stock} />}
+      {tab === "trades" && <TradesTab stock={stock} />}
       {TABS.map((t) =>
         "soon" in t && t.key === tab ? (
           <Card key={t.key}>
@@ -153,6 +160,7 @@ function Overview({ stockId }: { stockId: number }) {
       </div>
       <div className="flex flex-col gap-5">
         <PricePanel stockId={stock.id} currency={stock.currency} prices={listPrices(stock.id)} />
+        <TagEditor stockId={stock.id} tags={stockTagNames(stock.id)} allTags={listTags().map((t) => t.name)} />
         <Card className="p-4">
           <p className="mb-2 text-xs text-muted">
             종목과 모든 기록을 지웁니다. 판단 기록을 남기려면 삭제 대신 탈락 처리하세요.

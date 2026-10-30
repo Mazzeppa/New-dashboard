@@ -4,6 +4,7 @@ import type { AnalysisAnswers, AnalysisSection } from "@/domain/analysis";
 import type { FinancialSource } from "@/domain/financials";
 import type { Principles } from "@/domain/principles";
 import type { ValuationData } from "@/domain/valuation";
+import type { MemoContent, MemoSnapshot } from "@/domain/memo";
 import type { GateFailure, PipelineStage, SellReasonType, Stage } from "@/domain/pipeline";
 import type { DiscoverySource, Market } from "@/domain/stock";
 
@@ -227,6 +228,99 @@ export const valuations = sqliteTable("valuations", {
   updatedAt: updatedAt(),
 });
 
+// ── 5단계: 투자 메모 ────────────────────────────────────────────
+/**
+ * 버전별 메모. 작성 중(draft)인 버전은 하나뿐이고, 확정(confirmed)되면 스냅샷과 함께 고정된다.
+ * 확정 이후 수정은 새 버전(draft)으로만 한다. 원본은 복기 때 비교용으로 남는다.
+ */
+export const memos = sqliteTable(
+  "memos",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+    version: integer("version").notNull(),
+    status: text("status").$type<"draft" | "confirmed">().notNull().default("draft"),
+    content: text("content", { mode: "json" }).$type<MemoContent>().notNull(),
+    snapshot: text("snapshot", { mode: "json" }).$type<MemoSnapshot>(),
+    confirmedAt: text("confirmed_at"),
+    /** 새 버전을 만든 이유 (v2부터) */
+    revisionReason: text("revision_reason"),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [uniqueIndex("memos_stock_version_uq").on(t.stockId, t.version)],
+);
+
+// ── 6단계: 매수와 비중 ──────────────────────────────────────────
+/** 비중 결정 기록 (당시 상한·권장 범위·경고를 그대로 남긴다) */
+export const positionPlans = sqliteTable("position_plans", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+  conviction: integer("conviction").notNull(),
+  targetPct: real("target_pct").notNull(),
+  capPct: real("cap_pct").notNull(),
+  lossCapPct: real("loss_cap_pct"),
+  bearDownside: real("bear_downside"),
+  rangeMinPct: real("range_min_pct"),
+  rangeMaxPct: real("range_max_pct"),
+  warnings: text("warnings", { mode: "json" }).$type<string[]>().notNull().default(sql`'[]'`),
+  note: text("note"),
+  createdAt: createdAt(),
+});
+
+export const trades = sqliteTable(
+  "trades",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+    date: text("date").notNull(),
+    side: text("side").$type<"buy" | "sell">().notNull(),
+    quantity: real("quantity").notNull(),
+    price: real("price").notNull(),
+    /** 종목의 거래 통화 */
+    currency: text("currency").notNull(),
+    fee: real("fee").notNull().default(0),
+    memo: text("memo"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("trades_stock_idx").on(t.stockId)],
+);
+
+/** 수동 입력 환율: 통화 1단위당 원 */
+export const fxRates = sqliteTable(
+  "fx_rates",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    currency: text("currency").notNull(),
+    date: text("date").notNull(),
+    rateToKrw: real("rate_to_krw").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("fx_rates_currency_date_idx").on(t.currency, t.date)],
+);
+
+/** 통화별 현금 잔고 (포트폴리오 비중 계산용) */
+export const cashBalances = sqliteTable("cash_balances", {
+  currency: text("currency").primaryKey(),
+  amount: real("amount").notNull(),
+  updatedAt: updatedAt(),
+});
+
+/** 위험요인 태그 */
+export const tags = sqliteTable("tags", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+});
+
+export const stockTags = sqliteTable(
+  "stock_tags",
+  {
+    stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id").notNull().references(() => tags.id, { onDelete: "cascade" }),
+  },
+  (t) => [uniqueIndex("stock_tags_uq").on(t.stockId, t.tagId)],
+);
+
 // ── 체크리스트 템플릿 ───────────────────────────────────────────
 export const checklistTemplates = sqliteTable("checklist_templates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -288,3 +382,7 @@ export type ChecklistTemplateItem = typeof checklistTemplateItems.$inferSelect;
 export type ChecklistAnswer = typeof checklistAnswers.$inferSelect;
 export type FetchLog = typeof fetchLogs.$inferSelect;
 export type ValuationRow = typeof valuations.$inferSelect;
+export type MemoRow = typeof memos.$inferSelect;
+export type TradeRow = typeof trades.$inferSelect;
+export type PositionPlanRow = typeof positionPlans.$inferSelect;
+export type FxRateRow = typeof fxRates.$inferSelect;

@@ -2,6 +2,8 @@ import "server-only";
 import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import type { GateContext, PipelineStage } from "@/domain/pipeline";
 import { hasValuationResult } from "@/domain/valuation";
+import { memoMissing } from "@/domain/memo";
+import { computePosition } from "@/domain/portfolio";
 import { db, schema } from "./index";
 
 const { stocks, prices, stageTransitions, filterItems, filterResults, principles, principleVersions } = schema;
@@ -91,15 +93,18 @@ export function listBypassRecords(limit = 20) {
 
 /**
  * 게이트 판정용 컨텍스트.
- * 메모·복기 테이블은 이후 개발 단계에서 추가되며, 그때 이 함수를 채운다.
+ * 복기 테이블은 개발 6단계에서 추가되며, 그때 hasRetrospective를 채운다.
  */
 export function getGateContext(stockId: number): GateContext {
   const s = db.select({ rejectedFromStage: stocks.rejectedFromStage }).from(stocks).where(eq(stocks.id, stockId)).get();
   const valuation = getValuation(stockId);
+  const memos = listMemos(stockId);
+  const confirmed = memos.find((m) => m.status === "confirmed");
   return {
     hasValuation: !!valuation && hasValuationResult(valuation.data),
-    memoComplete: false,
-    memoConfirmed: false,
+    // 확정본이 있으면 필수 항목은 확정 때 이미 검증됐다. 없으면 작성 중인 버전을 본다
+    memoComplete: !!confirmed || (!!memos[0] && memoMissing(memos[0].content).length === 0),
+    memoConfirmed: !!confirmed,
     hasRetrospective: false,
     rejectedFromStage: (s?.rejectedFromStage ?? null) as PipelineStage | null,
   };
@@ -206,4 +211,72 @@ export function listFetchLogs(stockId: number, limit = 5) {
 
 export function getValuation(stockId: number) {
   return db.select().from(schema.valuations).where(eq(schema.valuations.stockId, stockId)).get() ?? null;
+}
+
+// ── 5단계: 메모 ─────────────────────────────────────────────────
+/** 최신 버전이 앞 */
+export function listMemos(stockId: number) {
+  return db.select().from(schema.memos).where(eq(schema.memos.stockId, stockId)).orderBy(desc(schema.memos.version)).all();
+}
+
+export function getMemo(id: number) {
+  return db.select().from(schema.memos).where(eq(schema.memos.id, id)).get() ?? null;
+}
+
+// ── 6단계: 매매·포트폴리오 ──────────────────────────────────────
+export function listTrades(stockId: number) {
+  return db.select().from(schema.trades).where(eq(schema.trades.stockId, stockId)).orderBy(desc(schema.trades.date), desc(schema.trades.id)).all();
+}
+
+export function listPositionPlans(stockId: number) {
+  return db.select().from(schema.positionPlans).where(eq(schema.positionPlans.stockId, stockId)).orderBy(desc(schema.positionPlans.createdAt)).all();
+}
+
+/** 통화별 최신 환율 */
+export function latestFxRates(): Record<string, { rate: number; date: string }> {
+  const rows = db.select().from(schema.fxRates).orderBy(asc(schema.fxRates.date), asc(schema.fxRates.id)).all();
+  const out: Record<string, { rate: number; date: string }> = {};
+  for (const r of rows) out[r.currency] = { rate: r.rateToKrw, date: r.date };
+  return out;
+}
+
+export function listFxRates(limit = 50) {
+  return db.select().from(schema.fxRates).orderBy(desc(schema.fxRates.date), desc(schema.fxRates.id)).limit(limit).all();
+}
+
+export function listCashBalances() {
+  return db.select().from(schema.cashBalances).orderBy(asc(schema.cashBalances.currency)).all();
+}
+
+export function listTags() {
+  return db.select().from(schema.tags).orderBy(asc(schema.tags.name)).all();
+}
+
+export function stockTagNames(stockId: number): string[] {
+  return db
+    .select({ name: schema.tags.name })
+    .from(schema.stockTags)
+    .innerJoin(schema.tags, eq(schema.tags.id, schema.stockTags.tagId))
+    .where(eq(schema.stockTags.stockId, stockId))
+    .orderBy(asc(schema.tags.name))
+    .all()
+    .map((r) => r.name);
+}
+
+/** 매매 기록이 있는 모든 종목의 포지션 (포트폴리오·비중 계산용) */
+export function listPositions() {
+  const allTrades = db.select().from(schema.trades).all();
+  const byStock = new Map<number, typeof allTrades>();
+  for (const t of allTrades) byStock.set(t.stockId, [...(byStock.get(t.stockId) ?? []), t]);
+  const stocksById = new Map(listStocks({ includeRejected: true }).map((s) => [s.id, s]));
+  const tagRows = db
+    .select({ stockId: schema.stockTags.stockId, name: schema.tags.name })
+    .from(schema.stockTags)
+    .innerJoin(schema.tags, eq(schema.tags.id, schema.stockTags.tagId))
+    .all();
+  return [...byStock.entries()].flatMap(([stockId, ts]) => {
+    const stock = stocksById.get(stockId);
+    if (!stock) return [];
+    return [{ stock, position: computePosition(ts), tags: tagRows.filter((t) => t.stockId === stockId).map((t) => t.name) }];
+  });
 }

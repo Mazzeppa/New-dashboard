@@ -29,6 +29,13 @@
       "when": 1793369515167,
       "tag": "0003_valuations",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1793398907833,
+      "tag": "0004_memos_trades",
+      "breakpoints": true
     }
   ]
 }

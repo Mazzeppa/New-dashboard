@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Columns3, LayoutDashboard, Plus, Settings, Trash2, Upload } from "lucide-react";
+import { BookOpen, Columns3, LayoutDashboard, PieChart, Plus, Settings, Trash2, Upload } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "./theme";
 
 const NAV = [
   { href: "/", label: "대시보드", icon: LayoutDashboard },
   { href: "/pipeline", label: "파이프라인", icon: Columns3 },
+  { href: "/portfolio", label: "포트폴리오", icon: PieChart },
   { href: "/rejected", label: "탈락 목록", icon: Trash2 },
   { href: "/principles", label: "투자 원칙", icon: BookOpen },
   { href: "/stocks/import", label: "후보 가져오기", icon: Upload },
