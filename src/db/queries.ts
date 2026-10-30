@@ -1,6 +1,7 @@
 import "server-only";
 import { and, asc, desc, eq, isNotNull, ne, sql } from "drizzle-orm";
 import type { GateContext, PipelineStage } from "@/domain/pipeline";
+import { hasValuationResult } from "@/domain/valuation";
 import { db, schema } from "./index";
 
 const { stocks, prices, stageTransitions, filterItems, filterResults, principles, principleVersions } = schema;
@@ -90,12 +91,13 @@ export function listBypassRecords(limit = 20) {
 
 /**
  * 게이트 판정용 컨텍스트.
- * 가치평가·메모·복기 테이블은 이후 개발 단계에서 추가되며, 그때 이 함수를 채운다.
+ * 메모·복기 테이블은 이후 개발 단계에서 추가되며, 그때 이 함수를 채운다.
  */
 export function getGateContext(stockId: number): GateContext {
   const s = db.select({ rejectedFromStage: stocks.rejectedFromStage }).from(stocks).where(eq(stocks.id, stockId)).get();
+  const valuation = getValuation(stockId);
   return {
-    hasValuation: false,
+    hasValuation: !!valuation && hasValuationResult(valuation.data),
     memoComplete: false,
     memoConfirmed: false,
     hasRetrospective: false,
@@ -200,4 +202,8 @@ export function listFetchLogs(stockId: number, limit = 5) {
     .orderBy(desc(schema.fetchLogs.createdAt), desc(schema.fetchLogs.id))
     .limit(limit)
     .all();
+}
+
+export function getValuation(stockId: number) {
+  return db.select().from(schema.valuations).where(eq(schema.valuations.stockId, stockId)).get() ?? null;
 }

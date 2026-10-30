@@ -3,6 +3,7 @@ import { index, integer, real, sqliteTable, text, uniqueIndex } from "drizzle-or
 import type { AnalysisAnswers, AnalysisSection } from "@/domain/analysis";
 import type { FinancialSource } from "@/domain/financials";
 import type { Principles } from "@/domain/principles";
+import type { ValuationData } from "@/domain/valuation";
 import type { GateFailure, PipelineStage, SellReasonType, Stage } from "@/domain/pipeline";
 import type { DiscoverySource, Market } from "@/domain/stock";
 
@@ -217,6 +218,15 @@ export const kv = sqliteTable("kv", {
   updatedAt: updatedAt(),
 });
 
+// ── 4단계: 가치평가 ─────────────────────────────────────────────
+/** 종목당 하나의 작업본. 투자 메모를 확정하면 그 시점 결과가 메모 스냅샷으로 고정된다(5단계) */
+export const valuations = sqliteTable("valuations", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  stockId: integer("stock_id").notNull().unique().references(() => stocks.id, { onDelete: "cascade" }),
+  data: text("data", { mode: "json" }).$type<ValuationData>().notNull(),
+  updatedAt: updatedAt(),
+});
+
 // ── 체크리스트 템플릿 ───────────────────────────────────────────
 export const checklistTemplates = sqliteTable("checklist_templates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -277,3 +287,4 @@ export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
 export type ChecklistTemplateItem = typeof checklistTemplateItems.$inferSelect;
 export type ChecklistAnswer = typeof checklistAnswers.$inferSelect;
 export type FetchLog = typeof fetchLogs.$inferSelect;
+export type ValuationRow = typeof valuations.$inferSelect;

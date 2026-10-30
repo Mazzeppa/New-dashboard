@@ -4,6 +4,7 @@ import { updateStock } from "@/app/actions/stocks";
 import { DeleteStockButton } from "@/components/stocks/delete-stock-button";
 import { AnalysisTab } from "@/components/analysis/analysis-tab";
 import { StockChecklists } from "@/components/analysis/stock-checklists";
+import { ValuationTab } from "@/components/valuation/valuation-tab";
 import { Badge, Card, CardHeader, EmptyState } from "@/components/ui";
 import { FilterChecklist } from "@/components/stocks/filter-checklist";
 import { PricePanel } from "@/components/stocks/price-panel";
@@ -32,7 +33,7 @@ const TABS = [
   { key: "filter", label: "1차 필터" },
   { key: "analysis", label: "심층 분석" },
   { key: "checklists", label: "체크리스트" },
-  { key: "valuation", label: "가치평가", soon: 4 },
+  { key: "valuation", label: "가치평가" },
   { key: "memo", label: "투자 메모", soon: 5 },
   { key: "trades", label: "매매·비중", soon: 5 },
   { key: "reviews", label: "보유 점검", soon: 6 },
@@ -113,6 +114,7 @@ export default async function StockPage({
           templates={listTemplates().map((t) => ({ id: t.template.id, name: t.template.name }))}
         />
       )}
+      {tab === "valuation" && <ValuationTab stock={stock} />}
       {TABS.map((t) =>
         "soon" in t && t.key === tab ? (
           <Card key={t.key}>
