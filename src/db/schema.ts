@@ -5,6 +5,7 @@ import type { FinancialSource } from "@/domain/financials";
 import type { Principles } from "@/domain/principles";
 import type { ValuationData } from "@/domain/valuation";
 import type { MemoContent, MemoSnapshot } from "@/domain/memo";
+import type { Decision, HoldingReviewInput, Outcome, Process } from "@/domain/review";
 import type { GateFailure, PipelineStage, SellReasonType, Stage } from "@/domain/pipeline";
 import type { DiscoverySource, Market } from "@/domain/stock";
 
@@ -321,6 +322,66 @@ export const stockTags = sqliteTable(
   (t) => [uniqueIndex("stock_tags_uq").on(t.stockId, t.tagId)],
 );
 
+// ── 7단계: 보유 점검 ────────────────────────────────────────────
+export const holdingReviews = sqliteTable(
+  "holding_reviews",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+    reviewDate: text("review_date").notNull(),
+    /** 점검 기준이 된 메모 버전 */
+    memoId: integer("memo_id").references(() => memos.id, { onDelete: "set null" }),
+    theses: text("theses", { mode: "json" }).$type<HoldingReviewInput["theses"]>().notNull(),
+    conditions: text("conditions", { mode: "json" }).$type<HoldingReviewInput["conditions"]>().notNull(),
+    catalysts: text("catalysts", { mode: "json" }).$type<HoldingReviewInput["catalysts"]>().notNull(),
+    decision: text("decision").$type<Decision>().notNull(),
+    reason: text("reason").notNull(),
+    price: real("price"),
+    createdAt: createdAt(),
+  },
+  (t) => [index("holding_reviews_stock_idx").on(t.stockId)],
+);
+
+// ── 8단계: 복기 ────────────────────────────────────────────────
+export const retrospectives = sqliteTable(
+  "retrospectives",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+    /** final = 매도 후 복기, interim = 보유 중 중간 복기 */
+    kind: text("kind").$type<"final" | "interim">().notNull(),
+    date: text("date").notNull(),
+    /** 비교 대상 메모 버전 (스냅샷) */
+    memoId: integer("memo_id").references(() => memos.id, { onDelete: "set null" }),
+    outcome: text("outcome").$type<Outcome>().notNull(),
+    process: text("process").$type<Process>().notNull(),
+    returnPct: real("return_pct"),
+    whatHappened: text("what_happened").notNull(),
+    thesisReview: text("thesis_review").notNull().default(""),
+    lessons: text("lessons").notNull().default(""),
+    /** 교훈을 원칙·체크리스트에 반영한 기록 */
+    appliedLessons: text("applied_lessons", { mode: "json" }).$type<{ target: "principle" | "filter"; text: string; at: string }[]>().notNull().default(sql`'[]'`),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index("retrospectives_stock_idx").on(t.stockId)],
+);
+
+export const mistakeTags = sqliteTable("mistake_tags", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull().unique(),
+  builtin: integer("builtin", { mode: "boolean" }).notNull().default(false),
+});
+
+export const retrospectiveTags = sqliteTable(
+  "retrospective_tags",
+  {
+    retrospectiveId: integer("retrospective_id").notNull().references(() => retrospectives.id, { onDelete: "cascade" }),
+    tagId: integer("tag_id").notNull().references(() => mistakeTags.id, { onDelete: "cascade" }),
+  },
+  (t) => [uniqueIndex("retrospective_tags_uq").on(t.retrospectiveId, t.tagId)],
+);
+
 // ── 체크리스트 템플릿 ───────────────────────────────────────────
 export const checklistTemplates = sqliteTable("checklist_templates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -386,3 +447,5 @@ export type MemoRow = typeof memos.$inferSelect;
 export type TradeRow = typeof trades.$inferSelect;
 export type PositionPlanRow = typeof positionPlans.$inferSelect;
 export type FxRateRow = typeof fxRates.$inferSelect;
+export type HoldingReviewRow = typeof holdingReviews.$inferSelect;
+export type RetrospectiveRow = typeof retrospectives.$inferSelect;

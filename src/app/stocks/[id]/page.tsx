@@ -8,7 +8,9 @@ import { ValuationTab } from "@/components/valuation/valuation-tab";
 import { MemoTab } from "@/components/memo/memo-tab";
 import { TradesTab } from "@/components/trades/trades-tab";
 import { TagEditor } from "@/components/stocks/tag-editor";
-import { Badge, Card, CardHeader, EmptyState } from "@/components/ui";
+import { ReviewsTab } from "@/components/reviews/reviews-tab";
+import { RetroTab } from "@/components/retro/retro-tab";
+import { Badge, Card, CardHeader } from "@/components/ui";
 import { FilterChecklist } from "@/components/stocks/filter-checklist";
 import { PricePanel } from "@/components/stocks/price-panel";
 import { StageControls } from "@/components/stocks/stage-controls";
@@ -41,8 +43,8 @@ const TABS = [
   { key: "valuation", label: "가치평가" },
   { key: "memo", label: "투자 메모" },
   { key: "trades", label: "매매·비중" },
-  { key: "reviews", label: "보유 점검", soon: 6 },
-  { key: "retro", label: "복기", soon: 6 },
+  { key: "reviews", label: "보유 점검" },
+  { key: "retro", label: "복기" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -122,13 +124,8 @@ export default async function StockPage({
       {tab === "valuation" && <ValuationTab stock={stock} />}
       {tab === "memo" && <MemoTab stock={stock} />}
       {tab === "trades" && <TradesTab stock={stock} />}
-      {TABS.map((t) =>
-        "soon" in t && t.key === tab ? (
-          <Card key={t.key}>
-            <EmptyState>{t.label} 화면은 개발 {t.soon}단계에서 추가됩니다.</EmptyState>
-          </Card>
-        ) : null,
-      )}
+      {tab === "reviews" && <ReviewsTab stock={stock} />}
+      {tab === "retro" && <RetroTab stock={stock} />}
     </>
   );
 }

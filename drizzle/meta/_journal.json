@@ -36,6 +36,13 @@
       "when": 1793398907833,
       "tag": "0004_memos_trades",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1793399633705,
+      "tag": "0005_reviews_retros",
+      "breakpoints": true
     }
   ]
 }

@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import { FISHER_15 } from "@/domain/checklist";
 import { DEFAULT_PRINCIPLES } from "@/domain/principles";
+import { DEFAULT_MISTAKE_TAGS } from "@/domain/review";
 import * as schema from "./schema";
 
 /** 2단계 1차 필터 기본 항목 */
@@ -30,6 +31,10 @@ export function seed(db: BetterSQLite3Database<typeof schema>) {
     const hasItems = tx.select({ n: sql<number>`count(*)` }).from(schema.filterItems).get();
     if (!hasItems?.n) {
       tx.insert(schema.filterItems).values(DEFAULT_FILTER_ITEMS).run();
+    }
+    const hasMistakeTags = tx.select({ n: sql<number>`count(*)` }).from(schema.mistakeTags).get();
+    if (!hasMistakeTags?.n) {
+      tx.insert(schema.mistakeTags).values(DEFAULT_MISTAKE_TAGS.map((name) => ({ name, builtin: true }))).run();
     }
     const hasTemplates = tx.select({ n: sql<number>`count(*)` }).from(schema.checklistTemplates).get();
     if (!hasTemplates?.n) {

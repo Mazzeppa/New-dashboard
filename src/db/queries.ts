@@ -93,7 +93,6 @@ export function listBypassRecords(limit = 20) {
 
 /**
  * 게이트 판정용 컨텍스트.
- * 복기 테이블은 개발 6단계에서 추가되며, 그때 hasRetrospective를 채운다.
  */
 export function getGateContext(stockId: number): GateContext {
   const s = db.select({ rejectedFromStage: stocks.rejectedFromStage }).from(stocks).where(eq(stocks.id, stockId)).get();
@@ -105,7 +104,7 @@ export function getGateContext(stockId: number): GateContext {
     // 확정본이 있으면 필수 항목은 확정 때 이미 검증됐다. 없으면 작성 중인 버전을 본다
     memoComplete: !!confirmed || (!!memos[0] && memoMissing(memos[0].content).length === 0),
     memoConfirmed: !!confirmed,
-    hasRetrospective: false,
+    hasRetrospective: listRetrospectives(stockId).some((r) => r.kind === "final"),
     rejectedFromStage: (s?.rejectedFromStage ?? null) as PipelineStage | null,
   };
 }
@@ -279,4 +278,104 @@ export function listPositions() {
     if (!stock) return [];
     return [{ stock, position: computePosition(ts), tags: tagRows.filter((t) => t.stockId === stockId).map((t) => t.name) }];
   });
+}
+
+// ── 7·8단계: 점검·복기 ─────────────────────────────────────────
+export function listHoldingReviews(stockId: number) {
+  return db
+    .select()
+    .from(schema.holdingReviews)
+    .where(eq(schema.holdingReviews.stockId, stockId))
+    .orderBy(desc(schema.holdingReviews.reviewDate), desc(schema.holdingReviews.id))
+    .all();
+}
+
+function tagsByRetro(): Map<number, string[]> {
+  const rows = db
+    .select({ retroId: schema.retrospectiveTags.retrospectiveId, name: schema.mistakeTags.name })
+    .from(schema.retrospectiveTags)
+    .innerJoin(schema.mistakeTags, eq(schema.mistakeTags.id, schema.retrospectiveTags.tagId))
+    .all();
+  const m = new Map<number, string[]>();
+  for (const r of rows) m.set(r.retroId, [...(m.get(r.retroId) ?? []), r.name]);
+  return m;
+}
+
+export function listRetrospectives(stockId: number) {
+  const tags = tagsByRetro();
+  return db
+    .select()
+    .from(schema.retrospectives)
+    .where(eq(schema.retrospectives.stockId, stockId))
+    .orderBy(desc(schema.retrospectives.date), desc(schema.retrospectives.id))
+    .all()
+    .map((r) => ({ ...r, tags: tags.get(r.id) ?? [] }));
+}
+
+/** 대시보드 통계용: 모든 복기 (중간 복기 포함) */
+export function listAllRetrospectives() {
+  const tags = tagsByRetro();
+  return db
+    .select({ r: schema.retrospectives, name: stocks.name, ticker: stocks.ticker })
+    .from(schema.retrospectives)
+    .innerJoin(stocks, eq(stocks.id, schema.retrospectives.stockId))
+    .orderBy(desc(schema.retrospectives.date))
+    .all()
+    .map(({ r, name, ticker }) => ({ ...r, stockName: name ?? ticker ?? "", tags: tags.get(r.id) ?? [] }));
+}
+
+export function listMistakeTags() {
+  return db.select().from(schema.mistakeTags).orderBy(desc(schema.mistakeTags.builtin), asc(schema.mistakeTags.name)).all();
+}
+
+/** 보유 종목별 마지막 점검일과 보유 시작 시점(보유 단계로 들어온 시각) */
+export function holdingReviewStatus() {
+  const holding = db.select().from(stocks).where(eq(stocks.stage, "holding")).all();
+  return holding.map((s) => {
+    const last = db
+      .select({ d: schema.holdingReviews.reviewDate })
+      .from(schema.holdingReviews)
+      .where(eq(schema.holdingReviews.stockId, s.id))
+      .orderBy(desc(schema.holdingReviews.reviewDate))
+      .limit(1)
+      .get();
+    const lastRetro = db
+      .select({ d: schema.retrospectives.date })
+      .from(schema.retrospectives)
+      .where(eq(schema.retrospectives.stockId, s.id))
+      .orderBy(desc(schema.retrospectives.date))
+      .limit(1)
+      .get();
+    return { stock: s, lastReviewDate: last?.d ?? null, lastRetroDate: lastRetro?.d ?? null, holdingSince: s.stageChangedAt };
+  });
+}
+
+/** 진행 중인 종목들의 최신 메모 촉매. 마지막 보유 점검에서 발생·빗나감으로 표시한 촉매는 뺀다 */
+export function activeCatalysts() {
+  const active = db.select().from(stocks).all().filter((s) => !["rejected", "sold", "reviewed"].includes(s.stage));
+  return active.flatMap((s) => {
+    const memo = listMemos(s.id)[0];
+    if (!memo) return [];
+    const lastReview = listHoldingReviews(s.id)[0];
+    const resolved = new Set((lastReview?.catalysts ?? []).filter((c) => c.status !== "pending").map((c) => c.description));
+    return memo.content.catalysts
+      .filter((c) => c.expectedDate && c.description.trim() && !resolved.has(c.description))
+      .map((c) => ({ stockId: s.id, stockName: s.name ?? s.ticker ?? "", description: c.description, expectedDate: c.expectedDate! }));
+  });
+}
+
+/** 매도했지만 최종 복기가 없는 종목 */
+export function stocksAwaitingRetro() {
+  const sold = db.select().from(stocks).where(eq(stocks.stage, "sold")).all();
+  return sold.filter((s) => !listRetrospectives(s.id).some((r) => r.kind === "final"));
+}
+
+/** 특정 종목의 게이트 우회 기록 */
+export function listStockBypasses(stockId: number) {
+  return db
+    .select()
+    .from(stageTransitions)
+    .where(and(eq(stageTransitions.stockId, stockId), isNotNull(stageTransitions.bypassReason)))
+    .orderBy(asc(stageTransitions.createdAt))
+    .all();
 }
