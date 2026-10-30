@@ -15,6 +15,13 @@
       "when": 1793352084007,
       "tag": "0001_analysis_checklists",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1793353500463,
+      "tag": "0002_data_fetch",
+      "breakpoints": true
     }
   ]
 }

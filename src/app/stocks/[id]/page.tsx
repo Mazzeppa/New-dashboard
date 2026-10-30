@@ -105,7 +105,7 @@ export default async function StockPage({
           results={listFilterResults(stock.id)}
         />
       )}
-      {tab === "analysis" && <AnalysisTab stock={{ id: stock.id, currency: stock.currency }} sub={sub} />}
+      {tab === "analysis" && <AnalysisTab stock={stock} sub={sub} />}
       {tab === "checklists" && (
         <StockChecklists
           stockId={stock.id}

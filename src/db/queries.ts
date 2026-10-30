@@ -191,3 +191,13 @@ export function getStockChecklists(stockId: number) {
     return { id: sc.id, createdAt: sc.createdAt, template, items, answers };
   });
 }
+
+export function listFetchLogs(stockId: number, limit = 5) {
+  return db
+    .select()
+    .from(schema.fetchLogs)
+    .where(eq(schema.fetchLogs.stockId, stockId))
+    .orderBy(desc(schema.fetchLogs.createdAt), desc(schema.fetchLogs.id))
+    .limit(limit)
+    .all();
+}

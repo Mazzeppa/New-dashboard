@@ -17,6 +17,10 @@
   --ok-bg: #e7f3ec;
   --warn-bg: #fdf1dc;
   --danger-bg: #fbe9e7;
+  /* 차트 계열색 (검증된 범주형 팔레트, 순서 고정) */
+  --series-1: #2a78d6;
+  --series-2: #eb6834;
+  --series-3: #1baf7a;
 }
 
 .dark {
@@ -34,6 +38,9 @@
   --ok-bg: #1d2e24;
   --warn-bg: #33281a;
   --danger-bg: #3a2220;
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
 }
 
 @theme inline {
@@ -51,6 +58,9 @@
   --color-ok-bg: var(--ok-bg);
   --color-warn-bg: var(--warn-bg);
   --color-danger-bg: var(--danger-bg);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
   --font-sans: "Pretendard", -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Malgun Gothic", "Noto Sans KR", sans-serif;
 }
 

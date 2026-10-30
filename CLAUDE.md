@@ -43,12 +43,19 @@ src/
     analysis.ts         # 비재무 분석 탭의 질문 정의(필드 목록), 답 정리, 완성도
     financials.ts       # 표준 재무 계정, 단위, 기간·숫자 파싱, 표 붙여넣기 해석
     checklist.ts        # 필립 피셔 15 시드, 점수 요약
+    metrics.ts          # 재무 지표(이익률, FCF, ROE, ROIC, 부채비율, NWC), 요약, 누적→분기 변환
   integrations/
     price/              # PriceProvider 인터페이스 + ManualPriceProvider
+    dart/normalize.ts   # (순수) DART 계정 매핑, 1차 필터 자동 체크 판정
+    dart/client.ts      # (server-only) DART API 호출, 고유번호 캐시, 재무제표·체크 수집
+    sec/normalize.ts    # (순수) companyfacts → 연간·분기 값, us-gaap 태그 매핑
+    sec/client.ts       # (server-only) 티커→CIK 캐시, companyfacts 호출
   lib/
     action.ts           # ActionResult 타입, 헬퍼 (클라이언트에서도 import 가능)
     server/candidates.ts# 후보 일괄 등록 로직 (CSV 액션과 API 라우트 공용)
-tests/                  # domain/* 단위 테스트
+    server/financial-fetch.ts # API 수집 → financial_values 저장 정책, 수집 기록
+tests/                  # domain/*, integrations/*/normalize 단위 테스트
+  fixtures/             # 실제 DART(삼성전자)·SEC(Apple) 응답을 줄인 것
 drizzle/                # 마이그레이션 SQL
 data/                   # SQLite 파일 (git 제외)
 ```
@@ -75,6 +82,40 @@ data/                   # SQLite 파일 (git 제외)
 - **재무 데이터**: `financial_values` 긴 형식(종목, 회계연도, 분기(0=연간), 계정 키, 값, 출처, sourceRef, 연결 여부). 계정 키는 `domain/financials.ts`의 `METRICS`. 값은 원 단위로 저장하고, 입력·표시 단위(억원, $M 등)는 화면에서만 곱하고 나눈다. 주식 수 계정은 단위를 곱하지 않는다. 사용자가 셀을 고치면 출처는 `manual`이 된다. 붙여넣기는 출처를 `report`나 `manual`로 고를 수 있다. API 수집분은 `dart`/`sec`(3단계에서 추가).
 - **기간 헤더 "2023/12"**: 연간(결산월)인지 분기인지 자료마다 다르므로 붙여넣기 화면에서 고른다. △, ▲, (1,234)는 음수로 읽는다.
 - **체크리스트 템플릿**: `checklist_templates` → `checklist_template_items` → 종목 적용 `stock_checklists` → `checklist_answers`(1~5점 + 메모). 질문은 "예"가 좋은 방향이 되도록 쓴다(피셔 13·14번은 그렇게 바꿔 적고 원문은 도움말에 남겼다). 평가에 쓰인 질문은 삭제할 수 없고 비활성화만 한다. 종목에 적용된 템플릿도 삭제할 수 없다.
+- **외부 데이터 수집 (3단계)**:
+  - 한국은 DART, 미국은 SEC EDGAR를 쓰고, 기타 시장은 수동 입력이나 붙여넣기를 쓴다. 수집은 연간 10년과 최근 12개 분기다.
+  - 응답 정규화(`normalize.ts`)는 순수 함수로 두고, 실제 응답을 줄인 fixture로 테스트한다. 네트워크 호출(`client.ts`)과 분리한다.
+  - **저장 정책**: API 값은 `source=dart|sec`, `sourceRef`(보고서·계정ID 또는 us-gaap 태그), `consolidated`와 함께 저장한다. 사용자가 직접 넣은 값(`manual`·`report`)은 "덮어쓰기"를 체크하지 않으면 유지한다. 같은 값을 다시 받으면 '변화 없음'으로 센다.
+  - 수집할 때마다 `fetch_logs`에 남긴다(성공·실패, 연도·분기, 찾지 못한 계정).
+- **DART**:
+  - 고유번호: `corpCode.xml`(zip)을 받아 상장사만 `dart_corps`에 캐시하고 30일마다 갱신한다. 종목코드로 찾고, 없으면 정확한 종목명으로 찾는다.
+  - 재무제표: `fnlttSinglAcntAll`로 사업연도마다 사업보고서의 당기 금액(최초 보고치)을 쓴다. 보고서마다 연결(CFS)을 먼저 시도하고, 없으면 별도(OFS)를 쓴다.
+  - 계정 매핑은 `DART_MAPPING`이다. IFRS 계정ID를 우선하고, "-표준계정코드 미사용-" 행은 계정명으로 찾는다. 2018년 이전 보고서의 `ifrs_` 접두어는 `ifrs-full_`로 맞춘다.
+  - 현금흐름표의 CAPEX·배당·자사주는 회사마다 부호가 달라 절댓값으로 저장한다.
+  - 현금성자산은 현금및현금성자산 + 단기금융상품이다. 차입부채에는 리스부채를 포함한다.
+  - 감가상각비와 이자비용은 이 API로 구할 수 없는 경우가 많아 직접 입력한다.
+  - 분기: 1분기·반기·3분기 보고서의 손익은 누적 금액(`thstrm_add_amount`)을, 현금흐름은 원래 누적인 금액을 쓴다. `quarterlyFromCumulative`로 분기 단독 값을 만든다(4분기 = 연간 − 3분기 누적). 재무상태표 계정은 각 보고서의 기말 값이다.
+  - 유통주식수는 `stockTotqySttus`의 보통주 `distb_stock_co`다(자기주식 제외, 액면분할 전 연도는 분할 전 주식 수).
+- **SEC**:
+  - `company_tickers.json`을 `sec_tickers`에 캐시하고, `companyfacts`의 us-gaap 태그를 쓴다. 회계연도는 10-K 연간 사실(350~380일)로 정하고, 표시 연도는 결산일의 연도다(예: Apple FY2026 1분기 = 2025년 10~12월).
+  - 같은 계정도 시기마다 태그가 달라(Revenues → RevenueFromContract…) 기간마다 태그 우선순위를 적용한다. 같은 기간 값이 여러 번 보고되면 가장 먼저 제출된 값을 쓴다.
+  - 분기 값은 3개월 값을 우선하고, 없으면 YTD 차이로 구한다. 유통주식수는 표지(dei)의 기준일 직전 기간에 붙인다.
+  - 외국 기업(20-F, IFRS)은 지원하지 않는다. SEC는 API 키가 없고 `SEC_USER_AGENT`(이름 이메일)만 필요하다.
+- **1차 필터 자동 체크** (`runFilterAutoChecks`):
+  - 결과는 `autoAnswer`/`autoEvidence`에만 저장한다. 사용자가 "확인하고 적용"을 눌러야 답으로 확정된다.
+  - 감사의견: 최근 사업보고서의 당기·전기·전전기 의견이 모두 '적정'이어야 통과한다. '부적정'이 '적정'을 포함하므로 한정·부적정·거절을 먼저 거른다.
+  - 증자: 최근 3년 안의 유상증자(정기보고서 증자 현황의 발행일)와 CB·BW 발행결정(주요사항보고서, 회차 기준으로 정정공시 중복 제거)을 합쳐 2건 이상이면 '반복'으로 보고 실패 처리한다.
+  - 최대주주: 최근 정기보고서의 변동 이력에 3년 안의 변동일이 있으면 실패다.
+  - 영업현금흐름: 저장된 연간 OCF 중 최근 2년이 모두 음수면 실패다. 시장과 관계없이 적용한다.
+- **재무 지표** (`computeMetrics`):
+  - ROE = 지배주주순이익 ÷ 평균 지배주주지분.
+  - ROIC = 영업이익 × (1 − 실효세율) ÷ 평균 투하자본. 투하자본 = 자본총계 + 차입부채 − 현금성자산. 실효세율이 0~50%를 벗어나면 25%를 쓴다.
+  - 분기 ROE·ROIC는 4를 곱해 연환산한다. 평균은 직전 기간이 있을 때만 기초·기말 평균을 쓴다.
+  - 부채비율 = 부채총계 ÷ 자본총계.
+  - NWC = (유동자산 − 현금성자산) − (유동부채 − 단기차입부채).
+  - 유지 CAPEX = CAPEX × 종목별 `maintenanceCapexPct`. 사용자가 입력한다.
+- **차트**: Recharts를 쓰고, 같은 단위끼리 한 차트로 묶는다(이중 축 금지). 계열색은 `--series-1..3` 토큰(라이트·다크 각각 검증)이다. 아래 지표 표가 차트의 표 보기 역할을 한다.
+- **클라우드 컨테이너에서 실행할 때**: Node 내장 fetch는 프록시 환경변수를 읽지 않으므로 `NODE_USE_ENV_PROXY=1 npm run dev`로 실행한다. 로컬 PC에서는 필요 없다. 이 컨테이너에서는 DART 다운로드가 느리다(corpCode 약 4분).
 - **가격**: `PriceProvider` 인터페이스로 추상화했다. 지금은 수동 입력(`prices` 테이블)만 쓰고, 가장 최근 날짜의 가격을 현재가로 본다.
 - **후보 가져오기**: CSV(클라이언트에서 papaparse로 해석)와 `POST /api/candidates`가 같은 `candidateSchema`와 `importCandidates()`를 쓴다. 같은 시장·티커는 건너뛴다. 엑셀이 지운 한국 종목코드의 앞자리 0은 복구한다. `IMPORT_API_TOKEN`을 설정하면 Bearer 인증이 필요하다.
 - **확신도별 권장 범위**: 원칙에 저장한다(기본값: 확신도 k이면 비중 상한의 (k-1)×20% ~ k×20%).
@@ -92,7 +133,7 @@ data/                   # SQLite 파일 (git 제외)
 
 1. [x] 셋업, 데이터 모델, 종목 CRUD, 칸반, 0·1·2단계
 2. [x] 3단계 심층 분석(재무 수동 입력), 체크리스트 템플릿(필립 피셔 15)
-3. [ ] DART / SEC EDGAR 연동, 재무 지표 자동 계산과 차트 (사용자가 보낼 파이썬 스크립트의 계정 매핑 참고)
+3. [x] DART / SEC EDGAR 연동, 재무 지표 자동 계산과 차트 (계정 매핑은 실제 응답으로 작성. 사용자 파이썬 스크립트를 받으면 대조할 것)
 4. [ ] 가치평가 계산기, 역DCF, 테스트
 5. [ ] 투자 메모·스냅샷, 매매 기록·포트폴리오
 6. [ ] 보유 점검, 복기, 대시보드 완성

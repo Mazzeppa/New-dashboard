@@ -1,9 +1,11 @@
 import Link from "next/link";
 import { Badge } from "@/components/ui";
-import { getAnalysisSections, listFinancialValues } from "@/db/queries";
+import { getAnalysisSections, listFetchLogs, listFinancialValues } from "@/db/queries";
 import { ANALYSIS_SECTIONS, completion, getSection } from "@/domain/analysis";
 import { cn } from "@/lib/cn";
+import { FetchPanel } from "./fetch-panel";
 import { FinancialGrid } from "./financial-grid";
+import { MetricsPanel } from "./metrics-panel";
 import { SectionEditor } from "./section-editor";
 
 const SUBTABS = [
@@ -13,7 +15,17 @@ const SUBTABS = [
   { key: "governance", label: "경영진·지배구조" },
 ] as const;
 
-export function AnalysisTab({ stock, sub }: { stock: { id: number; currency: string }; sub?: string }) {
+export interface AnalysisStock {
+  id: number;
+  currency: string;
+  market: string;
+  ticker: string | null;
+  corpCode: string | null;
+  cik: string | null;
+  maintenanceCapexPct: number | null;
+}
+
+export function AnalysisTab({ stock, sub }: { stock: AnalysisStock; sub?: string }) {
   const current = SUBTABS.some((s) => s.key === sub) ? sub! : "business";
   const sections = getAnalysisSections(stock.id);
 
@@ -48,7 +60,7 @@ export function AnalysisTab({ stock, sub }: { stock: { id: number; currency: str
       </nav>
 
       {current === "financials" ? (
-        <FinancialGrid stockId={stock.id} currency={stock.currency} values={listFinancialValues(stock.id)} />
+        <FinancialsSection stock={stock} />
       ) : (
         ANALYSIS_SECTIONS.filter((s) => s.key === current).map((def) => {
           const row = sections[def.key];
@@ -62,6 +74,22 @@ export function AnalysisTab({ stock, sub }: { stock: { id: number; currency: str
           );
         })
       )}
+    </div>
+  );
+}
+
+function FinancialsSection({ stock }: { stock: AnalysisStock }) {
+  const values = listFinancialValues(stock.id);
+  return (
+    <div className="flex flex-col gap-5">
+      <FetchPanel stock={stock} logs={listFetchLogs(stock.id, 10)} />
+      <MetricsPanel
+        stockId={stock.id}
+        currency={stock.currency}
+        maintenanceCapexPct={stock.maintenanceCapexPct}
+        values={values.map((v) => ({ metric: v.metric, year: v.fiscalYear, quarter: v.fiscalQuarter, value: v.value }))}
+      />
+      <FinancialGrid stockId={stock.id} currency={stock.currency} values={values} />
     </div>
   );
 }

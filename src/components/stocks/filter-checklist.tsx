@@ -3,11 +3,13 @@
 import * as React from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Check, X } from "lucide-react";
+import { Check, Wand2, X } from "lucide-react";
+import { applyAutoAnswer, runFilterAutoChecks } from "@/app/actions/data";
 import { saveFilterResult } from "@/app/actions/filter";
 import { useStageMove } from "@/components/pipeline/use-stage-move";
 import { Alert, Badge, Button, Card, CardHeader, Textarea } from "@/components/ui";
 import type { FilterAnswer, FilterItem, FilterResult } from "@/db/schema";
+import { formatDateTime } from "@/domain/format";
 import { cn } from "@/lib/cn";
 
 export function FilterChecklist({
@@ -59,9 +61,7 @@ export function FilterChecklist({
         </Alert>
       )}
 
-      {stock.market === "KR" && (
-        <Alert tone="warn">DART 자동 체크(감사의견, 증자, 최대주주 변동, CB 발행)는 개발 3단계에서 연결됩니다.</Alert>
-      )}
+      <AutoCheckBar stockId={stock.id} market={stock.market} onDone={() => router.refresh()} />
 
       <Card>
         <CardHeader title="1차 필터 체크리스트" description="빠른 탈락이 목적입니다. 하나라도 '아니오'면 탈락을 검토하세요." />
@@ -122,10 +122,20 @@ function FilterRow({
           {!item.active && <Badge className="ml-2">비활성 항목</Badge>}
           {item.origin === "lesson" && <Badge tone="accent" className="ml-2">복기 교훈</Badge>}
           {item.description && <p className="mt-0.5 text-xs text-muted">{item.description}</p>}
-          {result?.autoAnswer && (
-            <p className="mt-1 text-xs text-muted">
-              자동 체크: {result.autoAnswer === "yes" ? "통과" : "실패"} · {result.autoEvidence}
-            </p>
+          {result?.autoCheckedAt && (
+            <AutoResult
+              result={result}
+              differs={!!result.autoAnswer && answer !== null && answer !== result.autoAnswer}
+              onApply={() =>
+                start(async () => {
+                  await applyAutoAnswer(stockId, item.id);
+                  setAnswer(result.autoAnswer);
+                  onSaved();
+                })
+              }
+              applied={answer === result.autoAnswer}
+              pending={pending}
+            />
           )}
         </div>
       </div>
@@ -172,5 +182,73 @@ function AnswerButton({
     >
       {children}
     </button>
+  );
+}
+
+function AutoCheckBar({ stockId, market, onDone }: { stockId: number; market: string; onDone: () => void }) {
+  const [notes, setNotes] = React.useState<string[] | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+  const [pending, start] = React.useTransition();
+  const run = () =>
+    start(async () => {
+      const r = await runFilterAutoChecks(stockId);
+      if (!r.ok) return setError(r.error);
+      setError(null);
+      setNotes(r.data.notes);
+      onDone();
+    });
+  return (
+    <Card className="flex flex-col gap-2 p-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <Button onClick={run} disabled={pending}>
+          <Wand2 size={14} />
+          {pending ? "자동 체크 중…" : "자동 체크 실행"}
+        </Button>
+        <span className="text-xs text-muted">
+          {market === "KR"
+            ? "DART로 감사의견·증자/CB·BW·최대주주 변동을, 저장된 재무 데이터로 영업현금흐름을 확인합니다."
+            : "저장된 재무 데이터로 영업현금흐름을 확인합니다. 감사의견·증자·최대주주는 한국 종목만 자동 체크합니다."}{" "}
+          결과는 확인 후 항목별로 적용하세요.
+        </span>
+      </div>
+      {error && <Alert tone="danger">{error}</Alert>}
+      {notes?.map((n) => (
+        <Alert key={n} tone="warn">
+          {n}
+        </Alert>
+      ))}
+    </Card>
+  );
+}
+
+function AutoResult({
+  result,
+  differs,
+  applied,
+  onApply,
+  pending,
+}: {
+  result: FilterResult;
+  differs: boolean;
+  applied: boolean;
+  onApply: () => void;
+  pending: boolean;
+}) {
+  const label = result.autoAnswer === "yes" ? "통과" : result.autoAnswer === "no" ? "실패" : "판정 불가";
+  return (
+    <div className={cn("mt-1.5 rounded-md border px-2.5 py-1.5 text-xs", differs ? "border-warn bg-warn-bg" : "border-border bg-surface-2")}>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="font-medium">자동 체크</span>
+        <Badge tone={result.autoAnswer === "yes" ? "ok" : result.autoAnswer === "no" ? "danger" : "neutral"}>{label}</Badge>
+        {differs && <span className="text-warn">내 답과 다릅니다</span>}
+        <span className="text-muted">{formatDateTime(result.autoCheckedAt!)}</span>
+        {result.autoAnswer && !applied && (
+          <Button size="sm" className="ml-auto" onClick={onApply} disabled={pending}>
+            확인하고 적용
+          </Button>
+        )}
+      </div>
+      <p className="mt-1 whitespace-pre-wrap text-muted">{result.autoEvidence}</p>
+    </div>
   );
 }

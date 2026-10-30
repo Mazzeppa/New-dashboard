@@ -50,6 +50,8 @@ export const stocks = sqliteTable(
     watchHigh: real("watch_high"),
     rejectedFromStage: text("rejected_from_stage").$type<PipelineStage>(),
     rejectReason: text("reject_reason"),
+    /** CAPEX 중 유지 CAPEX 비율(%). 사용자가 입력한다 */
+    maintenanceCapexPct: real("maintenance_capex_pct"),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
   },
@@ -173,6 +175,48 @@ export const financialValues = sqliteTable(
   ],
 );
 
+/** 외부 데이터 수집 기록 (DART·SEC). 무엇을 언제 가져왔고 무엇이 비었는지 남긴다 */
+export const fetchLogs = sqliteTable(
+  "fetch_logs",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
+    /** dart | sec | dart_checks */
+    provider: text("provider").notNull(),
+    ok: integer("ok", { mode: "boolean" }).notNull(),
+    message: text("message").notNull(),
+    detail: text("detail", { mode: "json" }).$type<Record<string, unknown>>(),
+    createdAt: createdAt(),
+  },
+  (t) => [index("fetch_logs_stock_idx").on(t.stockId)],
+);
+
+/** DART 고유번호 목록 캐시 (corpCode.xml) */
+export const dartCorps = sqliteTable(
+  "dart_corps",
+  {
+    corpCode: text("corp_code").primaryKey(),
+    corpName: text("corp_name").notNull(),
+    stockCode: text("stock_code"),
+    modifyDate: text("modify_date"),
+  },
+  (t) => [index("dart_corps_stock_code_idx").on(t.stockCode)],
+);
+
+/** SEC 티커 → CIK 캐시 (company_tickers.json) */
+export const secTickers = sqliteTable("sec_tickers", {
+  ticker: text("ticker").primaryKey(),
+  cik: text("cik").notNull(),
+  title: text("title").notNull(),
+});
+
+/** 단순 키-값 저장소 (캐시 갱신 시각 등) */
+export const kv = sqliteTable("kv", {
+  key: text("key").primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: updatedAt(),
+});
+
 // ── 체크리스트 템플릿 ───────────────────────────────────────────
 export const checklistTemplates = sqliteTable("checklist_templates", {
   id: integer("id").primaryKey({ autoIncrement: true }),
@@ -232,3 +276,4 @@ export type FinancialValue = typeof financialValues.$inferSelect;
 export type ChecklistTemplate = typeof checklistTemplates.$inferSelect;
 export type ChecklistTemplateItem = typeof checklistTemplateItems.$inferSelect;
 export type ChecklistAnswer = typeof checklistAnswers.$inferSelect;
+export type FetchLog = typeof fetchLogs.$inferSelect;
