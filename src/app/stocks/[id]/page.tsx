@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { updateStock } from "@/app/actions/stocks";
 import { DeleteStockButton } from "@/components/stocks/delete-stock-button";
+import { AnalysisTab } from "@/components/analysis/analysis-tab";
+import { StockChecklists } from "@/components/analysis/stock-checklists";
 import { Badge, Card, CardHeader, EmptyState } from "@/components/ui";
 import { FilterChecklist } from "@/components/stocks/filter-checklist";
 import { PricePanel } from "@/components/stocks/price-panel";
@@ -11,9 +13,11 @@ import { TransitionList } from "@/components/stocks/transition-list";
 import {
   getPrinciples,
   getStock,
+  getStockChecklists,
   listFilterItems,
   listFilterResults,
   listPrices,
+  listTemplates,
   listTransitions,
 } from "@/db/queries";
 import { formatPrice } from "@/domain/format";
@@ -26,7 +30,8 @@ export const dynamic = "force-dynamic";
 const TABS = [
   { key: "overview", label: "개요" },
   { key: "filter", label: "1차 필터" },
-  { key: "analysis", label: "심층 분석", soon: 2 },
+  { key: "analysis", label: "심층 분석" },
+  { key: "checklists", label: "체크리스트" },
   { key: "valuation", label: "가치평가", soon: 4 },
   { key: "memo", label: "투자 메모", soon: 5 },
   { key: "trades", label: "매매·비중", soon: 5 },
@@ -40,10 +45,10 @@ export default async function StockPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ tab?: string }>;
+  searchParams: Promise<{ tab?: string; sub?: string }>;
 }) {
   const { id: idParam } = await params;
-  const { tab: tabParam } = await searchParams;
+  const { tab: tabParam, sub } = await searchParams;
   const id = Number(idParam);
   const stock = Number.isInteger(id) ? getStock(id) : null;
   if (!stock) notFound();
@@ -98,6 +103,14 @@ export default async function StockPage({
           stock={{ id: stock.id, label, market: stock.market, stage: stock.stage }}
           items={listFilterItems()}
           results={listFilterResults(stock.id)}
+        />
+      )}
+      {tab === "analysis" && <AnalysisTab stock={{ id: stock.id, currency: stock.currency }} sub={sub} />}
+      {tab === "checklists" && (
+        <StockChecklists
+          stockId={stock.id}
+          applied={getStockChecklists(stock.id)}
+          templates={listTemplates().map((t) => ({ id: t.template.id, name: t.template.name }))}
         />
       )}
       {TABS.map((t) =>

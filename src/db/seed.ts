@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import type { BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
+import { FISHER_15 } from "@/domain/checklist";
 import { DEFAULT_PRINCIPLES } from "@/domain/principles";
 import * as schema from "./schema";
 
@@ -29,6 +30,16 @@ export function seed(db: BetterSQLite3Database<typeof schema>) {
     const hasItems = tx.select({ n: sql<number>`count(*)` }).from(schema.filterItems).get();
     if (!hasItems?.n) {
       tx.insert(schema.filterItems).values(DEFAULT_FILTER_ITEMS).run();
+    }
+    const hasTemplates = tx.select({ n: sql<number>`count(*)` }).from(schema.checklistTemplates).get();
+    if (!hasTemplates?.n) {
+      const tpl = tx.insert(schema.checklistTemplates)
+        .values({ name: FISHER_15.name, description: FISHER_15.description, builtin: true })
+        .returning({ id: schema.checklistTemplates.id })
+        .get();
+      tx.insert(schema.checklistTemplateItems)
+        .values(FISHER_15.items.map((it, i) => ({ templateId: tpl.id, text: it.text, help: it.help ?? null, sortOrder: i })))
+        .run();
     }
   });
 }

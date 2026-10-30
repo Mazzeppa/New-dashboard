@@ -28,17 +28,21 @@ src/
   components/
     ui/                 # 공용 UI (Button, Input, Card, Dialog 등. 자체 구현, 외부 UI 키트 없음)
     pipeline/           # 칸반 보드, useStageMove (단계 이동 + 게이트 다이얼로그)
+    analysis/           # 심층 분석 탭(비재무 섹션 편집기, 재무 그리드·붙여넣기), 종목 체크리스트
     stocks/ principles/ settings/
   db/
     schema.ts           # Drizzle 스키마 (단일 진실 공급원)
-    index.ts            # better-sqlite3 연결, 자동 마이그레이션·시드 (server-only)
+    index.ts            # better-sqlite3 연결(첫 사용 시 지연 연결), 자동 마이그레이션·시드 (server-only)
     queries.ts          # 읽기 쿼리 (server-only)
-    seed.ts             # 기본 원칙, 1차 필터 기본 항목
+    seed.ts             # 기본 원칙, 1차 필터 기본 항목, 필립 피셔 15 템플릿
   domain/               # ★ 순수 함수. DB·UI를 모름. Vitest 대상
     pipeline.ts         # 단계 정의, evaluateMove (게이트 판정)
     format.ts           # 억원/조원, $M/$B, 숫자 파싱
     stock.ts            # 시장·발굴경로 상수, candidateSchema (CSV·API 공용 검증)
     principles.ts       # 원칙 스키마, 기본값, diff
+    analysis.ts         # 비재무 분석 탭의 질문 정의(필드 목록), 답 정리, 완성도
+    financials.ts       # 표준 재무 계정, 단위, 기간·숫자 파싱, 표 붙여넣기 해석
+    checklist.ts        # 필립 피셔 15 시드, 점수 요약
   integrations/
     price/              # PriceProvider 인터페이스 + ManualPriceProvider
   lib/
@@ -66,6 +70,11 @@ data/                   # SQLite 파일 (git 제외)
 - **게이트 컨텍스트**: `db/queries.ts`의 `getGateContext()`. 가치평가·메모·복기 테이블은 이후 개발 단계에서 생기므로, 그때 이 함수를 채운다. 그 전까지는 해당 게이트가 항상 실패한다.
 - **탈락**: `stocks.rejectedFromStage`와 `rejectReason`. 복원하면 원래 단계로 돌아간다.
 - **1차 필터 항목**: 기록이 남은 항목은 삭제하지 않고 비활성화한다(과거 판단 보존). `autoKey`는 DART 자동 체크 연결용이다. `origin='lesson'`은 복기 교훈에서 온 항목이다.
+- **DB 연결은 지연 연결**: `db`는 Proxy이고 첫 쿼리 때 연결·마이그레이션한다. 모듈 최상위에서 쿼리 빌더를 호출하지 않는다(서브쿼리도 함수로 감싼다). `next build`가 여러 워커에서 모듈을 import할 때 마이그레이션이 경쟁해 빌드가 깨지기 때문이다.
+- **심층 분석(비재무)**: 질문은 `domain/analysis.ts`의 `ANALYSIS_SECTIONS`에 필드 목록으로 정의하고, 화면은 이를 그대로 렌더링한다. 답은 `analysis_sections.answers` JSON(종목·탭당 한 행)과 1~5점 `score`로 저장한다. 질문을 추가하려면 정의만 바꾸면 된다(`sanitizeAnswers`가 정의 밖 키를 버린다).
+- **재무 데이터**: `financial_values` 긴 형식(종목, 회계연도, 분기(0=연간), 계정 키, 값, 출처, sourceRef, 연결 여부). 계정 키는 `domain/financials.ts`의 `METRICS`. 값은 원 단위로 저장하고, 입력·표시 단위(억원, $M 등)는 화면에서만 곱하고 나눈다. 주식 수 계정은 단위를 곱하지 않는다. 사용자가 셀을 고치면 출처는 `manual`이 된다. 붙여넣기는 출처를 `report`나 `manual`로 고를 수 있다. API 수집분은 `dart`/`sec`(3단계에서 추가).
+- **기간 헤더 "2023/12"**: 연간(결산월)인지 분기인지 자료마다 다르므로 붙여넣기 화면에서 고른다. △, ▲, (1,234)는 음수로 읽는다.
+- **체크리스트 템플릿**: `checklist_templates` → `checklist_template_items` → 종목 적용 `stock_checklists` → `checklist_answers`(1~5점 + 메모). 질문은 "예"가 좋은 방향이 되도록 쓴다(피셔 13·14번은 그렇게 바꿔 적고 원문은 도움말에 남겼다). 평가에 쓰인 질문은 삭제할 수 없고 비활성화만 한다. 종목에 적용된 템플릿도 삭제할 수 없다.
 - **가격**: `PriceProvider` 인터페이스로 추상화했다. 지금은 수동 입력(`prices` 테이블)만 쓰고, 가장 최근 날짜의 가격을 현재가로 본다.
 - **후보 가져오기**: CSV(클라이언트에서 papaparse로 해석)와 `POST /api/candidates`가 같은 `candidateSchema`와 `importCandidates()`를 쓴다. 같은 시장·티커는 건너뛴다. 엑셀이 지운 한국 종목코드의 앞자리 0은 복구한다. `IMPORT_API_TOKEN`을 설정하면 Bearer 인증이 필요하다.
 - **확신도별 권장 범위**: 원칙에 저장한다(기본값: 확신도 k이면 비중 상한의 (k-1)×20% ~ k×20%).
@@ -82,7 +91,7 @@ data/                   # SQLite 파일 (git 제외)
 ## 개발 단계 진행 상황
 
 1. [x] 셋업, 데이터 모델, 종목 CRUD, 칸반, 0·1·2단계
-2. [ ] 3단계 심층 분석(재무 수동 입력), 체크리스트 템플릿(필립 피셔 15)
+2. [x] 3단계 심층 분석(재무 수동 입력), 체크리스트 템플릿(필립 피셔 15)
 3. [ ] DART / SEC EDGAR 연동, 재무 지표 자동 계산과 차트 (사용자가 보낼 파이썬 스크립트의 계정 매핑 참고)
 4. [ ] 가치평가 계산기, 역DCF, 테스트
 5. [ ] 투자 메모·스냅샷, 매매 기록·포트폴리오

@@ -15,16 +15,17 @@ export function listPrincipleVersions() {
   return db.select().from(principleVersions).orderBy(desc(principleVersions.version)).all();
 }
 
-/** 종목별 최신 가격 (date 최신, 같은 날이면 나중에 입력한 것) */
-const latestPrice = db
-  .select({
-    stockId: prices.stockId,
-    price: prices.price,
-    date: prices.date,
-    rn: sql<number>`row_number() over (partition by ${prices.stockId} order by ${prices.date} desc, ${prices.id} desc)`.as("rn"),
-  })
-  .from(prices)
-  .as("lp");
+/** 종목별 최신 가격 (date 최신, 같은 날이면 나중에 입력한 것). 모듈 로드 시 DB를 열지 않도록 함수로 둔다 */
+const latestPriceSubquery = () =>
+  db
+    .select({
+      stockId: prices.stockId,
+      price: prices.price,
+      date: prices.date,
+      rn: sql<number>`row_number() over (partition by ${prices.stockId} order by ${prices.date} desc, ${prices.id} desc)`.as("rn"),
+    })
+    .from(prices)
+    .as("lp");
 
 export type StockWithPrice = typeof schema.stocks.$inferSelect & {
   price: number | null;
@@ -32,6 +33,7 @@ export type StockWithPrice = typeof schema.stocks.$inferSelect & {
 };
 
 export function listStocks(opts: { includeRejected?: boolean } = {}): StockWithPrice[] {
+  const latestPrice = latestPriceSubquery();
   return db
     .select({
       stock: stocks,
@@ -51,6 +53,7 @@ export function listRejected() {
 }
 
 export function getStock(id: number): StockWithPrice | null {
+  const latestPrice = latestPriceSubquery();
   const row = db
     .select({ stock: stocks, price: latestPrice.price, priceDate: latestPrice.date })
     .from(stocks)
@@ -120,4 +123,71 @@ export function listFilterItems(opts: { activeOnly?: boolean } = {}) {
 
 export function listFilterResults(stockId: number) {
   return db.select().from(filterResults).where(eq(filterResults.stockId, stockId)).all();
+}
+
+// ── 3단계: 심층 분석 ────────────────────────────────────────────
+export function getAnalysisSections(stockId: number) {
+  const rows = db.select().from(schema.analysisSections).where(eq(schema.analysisSections.stockId, stockId)).all();
+  return Object.fromEntries(rows.map((r) => [r.section, r])) as Partial<Record<string, (typeof rows)[number]>>;
+}
+
+export function listFinancialValues(stockId: number) {
+  return db
+    .select()
+    .from(schema.financialValues)
+    .where(eq(schema.financialValues.stockId, stockId))
+    .orderBy(asc(schema.financialValues.fiscalYear), asc(schema.financialValues.fiscalQuarter))
+    .all();
+}
+
+// ── 체크리스트 템플릿 ───────────────────────────────────────────
+export function listTemplates() {
+  const { checklistTemplates: t, checklistTemplateItems: i, stockChecklists: sc } = schema;
+  return db
+    .select({
+      template: t,
+      itemCount: sql<number>`(select count(*) from ${i} where ${i.templateId} = ${t.id} and ${i.active} = 1)`,
+      usedBy: sql<number>`(select count(*) from ${sc} where ${sc.templateId} = ${t.id})`,
+    })
+    .from(t)
+    .orderBy(desc(t.builtin), asc(t.id))
+    .all();
+}
+
+export function getTemplateWithItems(templateId: number) {
+  const template = db.select().from(schema.checklistTemplates).where(eq(schema.checklistTemplates.id, templateId)).get();
+  if (!template) return null;
+  const items = db
+    .select({
+      item: schema.checklistTemplateItems,
+      used: sql<number>`(select count(*) from ${schema.checklistAnswers} where ${schema.checklistAnswers.itemId} = ${schema.checklistTemplateItems.id})`,
+    })
+    .from(schema.checklistTemplateItems)
+    .where(eq(schema.checklistTemplateItems.templateId, templateId))
+    .orderBy(asc(schema.checklistTemplateItems.sortOrder), asc(schema.checklistTemplateItems.id))
+    .all();
+  return { template, items: items.map((r) => ({ ...r.item, used: r.used })) };
+}
+
+/** 종목에 적용된 체크리스트: 템플릿, 항목(활성 + 답이 있는 비활성), 답 */
+export function getStockChecklists(stockId: number) {
+  const applied = db
+    .select({ sc: schema.stockChecklists, template: schema.checklistTemplates })
+    .from(schema.stockChecklists)
+    .innerJoin(schema.checklistTemplates, eq(schema.checklistTemplates.id, schema.stockChecklists.templateId))
+    .where(eq(schema.stockChecklists.stockId, stockId))
+    .orderBy(asc(schema.stockChecklists.id))
+    .all();
+  return applied.map(({ sc, template }) => {
+    const answers = db.select().from(schema.checklistAnswers).where(eq(schema.checklistAnswers.stockChecklistId, sc.id)).all();
+    const answered = new Set(answers.filter((a) => a.score != null || a.memo).map((a) => a.itemId));
+    const items = db
+      .select()
+      .from(schema.checklistTemplateItems)
+      .where(eq(schema.checklistTemplateItems.templateId, template.id))
+      .orderBy(asc(schema.checklistTemplateItems.sortOrder), asc(schema.checklistTemplateItems.id))
+      .all()
+      .filter((i) => i.active || answered.has(i.id));
+    return { id: sc.id, createdAt: sc.createdAt, template, items, answers };
+  });
 }
