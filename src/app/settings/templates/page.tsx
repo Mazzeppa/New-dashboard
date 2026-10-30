@@ -4,6 +4,8 @@ import { TemplatesList } from "@/components/settings/templates-list";
 import { listTemplates } from "@/db/queries";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "체크리스트 템플릿" };
+
 
 export default function TemplatesPage() {
   const rows = listTemplates();

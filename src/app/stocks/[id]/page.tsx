@@ -10,6 +10,7 @@ import { TradesTab } from "@/components/trades/trades-tab";
 import { TagEditor } from "@/components/stocks/tag-editor";
 import { ReviewsTab } from "@/components/reviews/reviews-tab";
 import { RetroTab } from "@/components/retro/retro-tab";
+import { ProcessSummary } from "@/components/stocks/process-summary";
 import { Badge, Card, CardHeader } from "@/components/ui";
 import { FilterChecklist } from "@/components/stocks/filter-checklist";
 import { PricePanel } from "@/components/stocks/price-panel";
@@ -34,6 +35,12 @@ import { DISCOVERY_SOURCES, MARKETS, displayName, isInWatchRange } from "@/domai
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const stock = getStock(Number(id));
+  return { title: stock ? displayName(stock) : "종목" };
+}
 
 const TABS = [
   { key: "overview", label: "개요" },
@@ -105,7 +112,12 @@ export default async function StockPage({
         ))}
       </nav>
 
-      {tab === "overview" && <Overview stockId={stock.id} />}
+      {tab === "overview" && (
+        <div className="flex flex-col gap-5">
+          <ProcessSummary stock={stock} />
+          <Overview stockId={stock.id} />
+        </div>
+      )}
       {tab === "filter" && (
         <FilterChecklist
           stock={{ id: stock.id, label, market: stock.market, stage: stock.stage }}

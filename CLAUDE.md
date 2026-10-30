@@ -26,6 +26,8 @@ src/
     actions/            # Server Actions ("use server"). 모든 데이터 변경은 여기서
     api/candidates/     # POST: 외부 후보 일괄 등록 (스크리너 연결 진입점)
     api/memos/[id]/markdown/ # GET: 투자 메모 마크다운 내보내기
+    api/backup/         # GET: 전체 JSON 백업, POST: 복원
+    api/export/[kind]/  # GET: CSV 내보내기 (stocks, trades, portfolio, retrospectives, financials)
     portfolio/          # 포트폴리오 화면
   components/
     ui/                 # 공용 UI (Button, Input, Card, Dialog 등. 자체 구현, 외부 UI 키트 없음)
@@ -58,6 +60,7 @@ src/
     portfolio.ts        # 매매 → 포지션(이동평균), 포트폴리오 원화 환산·비중·노출도·경고
     sell-conditions.ts  # 구조화된 매도 조건 자동 평가 (최근 N개 연속 기간)
     review.ts           # 보유 점검·복기 스키마, 점검 주기, 2×2 분류, 촉매 일정, 복기 통계
+    csv.ts              # CSV 생성 (BOM, 이스케이프)
   integrations/
     price/              # PriceProvider 인터페이스 + ManualPriceProvider
     dart/normalize.ts   # (순수) DART 계정 매핑, 1차 필터 자동 체크 판정
@@ -68,6 +71,7 @@ src/
     action.ts           # ActionResult 타입, 헬퍼 (클라이언트에서도 import 가능)
     server/candidates.ts# 후보 일괄 등록 로직 (CSV 액션과 API 라우트 공용)
     server/financial-fetch.ts # API 수집 → financial_values 저장 정책, 수집 기록
+    server/backup.ts    # 전체 백업·복원 (테이블 목록, 스키마 버전 확인)
 tests/                  # domain/*, integrations/*/normalize 단위 테스트
   fixtures/             # 실제 DART(삼성전자)·SEC(Apple) 응답을 줄인 것
 drizzle/                # 마이그레이션 SQL
@@ -199,6 +203,20 @@ data/                   # SQLite 파일 (git 제외)
   - 다가오는 촉매: 진행 중 종목의 최신 메모 기준 120일 이내와 지난 60일. 마지막 점검에서 발생·빗나감으로 표시한 촉매는 뺀다.
   - 2×2 분포와 실수 태그 누적: final 복기만 센다.
   - 관심 가격 구간, 게이트 우회 기록
+- **백업·내보내기 (7단계)**:
+  - **백업**: `GET /api/backup`이 `{ app, schemaVersion, exportedAt, counts, tables }` JSON을 준다. `schemaVersion`은 적용된 마이그레이션 수다. 테이블 목록은 `lib/server/backup.ts`의 `TABLES`(외래키 순서)이고, API 캐시(dart_corps, sec_tickers, kv)는 뺀다.
+  - **새 테이블을 추가하면 반드시 `TABLES`에도 넣는다.** 넣지 않으면 백업에서 빠진다.
+  - **복원**: `POST /api/backup`. 같은 schemaVersion만 받는다. 복원 직전 상태를 `data/backups/pre-import-*.json`에 저장한 뒤, 한 트랜잭션에서 전부 지우고 다시 넣는다(`defer_foreign_keys`).
+    - 화면에서는 "복원"을 입력해야 실행된다.
+    - Server Action 대신 Route Handler를 쓰는 이유는 본문 크기 제한(1MB) 때문이다.
+  - **CSV**: `GET /api/export/[kind]`. UTF-8 BOM과 CRLF로 엑셀에서 한글이 깨지지 않는다. 금액은 원 단위 그대로다.
+    - 재무 CSV는 붙여넣기 형식(첫 열 계정명, 첫 행 기간)이라 다시 넣으면 그대로 들어간다.
+  - 다운로드 링크는 `DownloadButton`(일반 `<a download>`)을 쓴다. `Link`는 API를 프리페치하므로 쓰지 않는다.
+- **화면 공통**:
+  - 페이지 제목은 `metadata.title`이고 템플릿 `%s · 가치투자 프로세스`를 따른다.
+  - `app/error.tsx`, `not-found.tsx`, `loading.tsx`는 한국어다.
+  - 종목 개요 맨 위의 `ProcessSummary`가 단계별 진행 상황을 한 줄로 보여 준다.
+  - 휴대폰(390px)부터 데스크톱까지 문서 가로 넘침이 없어야 한다. 넓은 표는 카드 안에서만 가로로 스크롤한다.
 - **가격**: `PriceProvider` 인터페이스로 추상화했다. 지금은 수동 입력(`prices` 테이블)만 쓰고, 가장 최근 날짜의 가격을 현재가로 본다.
 - **후보 가져오기**: CSV(클라이언트에서 papaparse로 해석)와 `POST /api/candidates`가 같은 `candidateSchema`와 `importCandidates()`를 쓴다. 같은 시장·티커는 건너뛴다. 엑셀이 지운 한국 종목코드의 앞자리 0은 복구한다. `IMPORT_API_TOKEN`을 설정하면 Bearer 인증이 필요하다.
 - **확신도별 권장 범위**: 원칙에 저장한다(기본값: 확신도 k이면 비중 상한의 (k-1)×20% ~ k×20%).
@@ -220,4 +238,4 @@ data/                   # SQLite 파일 (git 제외)
 4. [x] 가치평가 계산기, 역DCF, 테스트
 5. [x] 투자 메모·스냅샷, 매매 기록·포트폴리오
 6. [x] 보유 점검, 복기, 대시보드 완성
-7. [ ] 백업/내보내기, 다듬기
+7. [x] 백업/내보내기, 다듬기

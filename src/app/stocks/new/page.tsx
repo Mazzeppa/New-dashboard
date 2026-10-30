@@ -4,6 +4,8 @@ import { StockForm } from "@/components/stocks/stock-form";
 import { getPrinciples } from "@/db/queries";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "종목 추가" };
+
 
 export default function NewStockPage() {
   const { data } = getPrinciples();

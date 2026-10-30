@@ -4,7 +4,7 @@ import { Nav } from "@/components/nav";
 import { ThemeProvider } from "@/components/theme";
 
 export const metadata: Metadata = {
-  title: "가치투자 프로세스",
+  title: { default: "가치투자 프로세스", template: "%s · 가치투자 프로세스" },
   description: "아이디어에서 복기까지, 가치투자 프로세스를 기록하고 지키는 개인용 도구",
 };
 

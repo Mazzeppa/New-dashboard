@@ -6,6 +6,8 @@ import { STAGE_LABELS } from "@/domain/pipeline";
 import { displayName } from "@/domain/stock";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "탈락 목록" };
+
 
 export default function RejectedPage() {
   const rows = listRejected();

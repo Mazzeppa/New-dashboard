@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { CheckCircle2, Download, FilePlus2, Lock, Plus, Trash2 } from "lucide-react";
 import { confirmMemo, createMemoRevision, discardMemoDraft, saveMemoDraft } from "@/app/actions/memos";
-import { Alert, Badge, Button, Card, CardHeader, Field, Input, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardHeader, Field, Input, Textarea, DownloadButton } from "@/components/ui";
 import { Dialog } from "@/components/ui/dialog";
 import type { MemoRow } from "@/db/schema";
 import { formatDateTime, formatPrice, formatRatio } from "@/domain/format";
@@ -190,11 +190,9 @@ export function MemoWorkspace({
           </Button>
         )}
         {selected && (
-          <a href={`/api/memos/${selected.id}/markdown`} className="w-full">
-            <Button className="w-full">
-              <Download size={14} /> v{selected.version} 마크다운 내보내기
-            </Button>
-          </a>
+          <DownloadButton href={`/api/memos/${selected.id}/markdown`}>
+            <Download size={14} /> v{selected.version} 마크다운 내보내기
+          </DownloadButton>
         )}
       </aside>
 

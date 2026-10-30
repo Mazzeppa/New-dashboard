@@ -17,6 +17,8 @@ import { today } from "@/lib/action";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "대시보드" };
+
 
 export default function DashboardPage() {
   const now = today();

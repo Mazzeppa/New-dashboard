@@ -379,3 +379,13 @@ export function listStockBypasses(stockId: number) {
     .orderBy(asc(stageTransitions.createdAt))
     .all();
 }
+
+export function listMistakeTagsWithUsage() {
+  const used = db
+    .select({ tagId: schema.retrospectiveTags.tagId, n: sql<number>`count(*)` })
+    .from(schema.retrospectiveTags)
+    .groupBy(schema.retrospectiveTags.tagId)
+    .all();
+  const m = new Map(used.map((u) => [u.tagId, u.n]));
+  return listMistakeTags().map((t) => ({ ...t, used: m.get(t.id) ?? 0 }));
+}

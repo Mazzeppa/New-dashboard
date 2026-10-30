@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
 import { addTrade, deleteTrade, savePositionPlan } from "@/app/actions/portfolio";
 import { useStageMove } from "@/components/pipeline/use-stage-move";
-import { Alert, Badge, Button, Card, CardHeader, Field, Input, Select, Table, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardHeader, Field, Input, Select, Table, Textarea, DownloadButton } from "@/components/ui";
 import { NumberField } from "@/components/valuation/number-field";
 import type { PositionPlanRow, TradeRow } from "@/db/schema";
 import { formatAmount, formatDateTime, formatNumber, formatPrice, formatRatio } from "@/domain/format";
@@ -67,7 +67,17 @@ export function TradesWorkspace({
       <SizingHelper stock={stock} sizing={sizing} position={position} plans={plans} />
 
       <Card>
-        <CardHeader title="포지션" description={`이동평균법, 수수료 포함 · 통화 ${stock.currency}`} />
+        <CardHeader
+          title="포지션"
+          description={`이동평균법, 수수료 포함 · 통화 ${stock.currency}`}
+          actions={
+            trades.length > 0 && (
+              <DownloadButton size="sm" href={`/api/export/trades?stockId=${stock.id}`}>
+                매매 기록 CSV
+              </DownloadButton>
+            )
+          }
+        />
         <div className="grid grid-cols-2 gap-px overflow-hidden border-b border-border bg-border sm:grid-cols-3 lg:grid-cols-6">
           {[
             ["보유 수량", `${formatNumber(position.quantity, 4)}주`],

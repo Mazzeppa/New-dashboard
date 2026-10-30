@@ -1,6 +1,8 @@
 import { Card, CardHeader, PageHeader } from "@/components/ui";
 import { CsvImport } from "@/components/stocks/csv-import";
 
+export const metadata = { title: "후보 가져오기" };
+
 const EXAMPLE = `curl -X POST http://localhost:3000/api/candidates \\
   -H "Content-Type: application/json" \\
   -H "Authorization: Bearer $IMPORT_API_TOKEN" \\

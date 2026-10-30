@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Alert, Card, CardHeader, EmptyState, PageHeader, Table } from "@/components/ui";
+import { Alert, Card, CardHeader, DownloadButton, EmptyState, PageHeader, Table } from "@/components/ui";
 import { CashFxEditor } from "@/components/portfolio/cash-fx-editor";
 import { ExposureBars } from "@/components/portfolio/exposure-bars";
 import { getPrinciples, latestFxRates, listCashBalances, listFxRates, listPositions } from "@/db/queries";
@@ -9,6 +9,8 @@ import { buildPortfolio, krwRate } from "@/domain/portfolio";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "포트폴리오" };
+
 
 export default function PortfolioPage() {
   const { data: principles } = getPrinciples();
@@ -33,7 +35,16 @@ export default function PortfolioPage() {
 
   return (
     <>
-      <PageHeader title="포트폴리오" description="원화 기준 환산. 비중은 현금을 포함한 총액 대비입니다. 한도는 투자 원칙에서 가져옵니다." />
+      <PageHeader
+        title="포트폴리오"
+        description="원화 기준 환산. 비중은 현금을 포함한 총액 대비입니다. 한도는 투자 원칙에서 가져옵니다."
+        actions={
+          <>
+            <DownloadButton href="/api/export/portfolio">보유 종목 CSV</DownloadButton>
+            <DownloadButton href="/api/export/trades">매매 기록 CSV</DownloadButton>
+          </>
+        }
+      />
       <div className="flex flex-col gap-5">
         <div className="grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-5">
           {[

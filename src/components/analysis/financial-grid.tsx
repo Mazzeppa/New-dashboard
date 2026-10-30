@@ -3,9 +3,9 @@
 import * as React from "react";
 import { useRouter } from "next/navigation";
 import Papa from "papaparse";
-import { ClipboardPaste, Plus, Trash2 } from "lucide-react";
+import { ClipboardPaste, Download, Plus, Trash2 } from "lucide-react";
 import { deleteFinancialPeriod, saveFinancialValues } from "@/app/actions/analysis";
-import { Alert, Badge, Button, Card, CardHeader, Field, Input, Select, Textarea } from "@/components/ui";
+import { Alert, Badge, Button, Card, CardHeader, Field, Input, Select, Textarea, DownloadButton } from "@/components/ui";
 import { Dialog } from "@/components/ui/dialog";
 import type { FinancialValue } from "@/db/schema";
 import {
@@ -134,9 +134,14 @@ export function FinancialGrid({ stockId, currency, values }: { stockId: number; 
         title="재무 데이터"
         description="모든 숫자는 출처와 함께 저장됩니다. 칸 왼쪽 색: 파랑 API · 초록 보고서 · 주황 수동. 칸에 마우스를 올리면 출처를 봅니다."
         actions={
-          <Button size="sm" onClick={() => setPasteOpen(true)}>
-            <ClipboardPaste size={14} /> CSV·엑셀 붙여넣기
-          </Button>
+          <>
+            <DownloadButton size="sm" href={`/api/export/financials?stockId=${stockId}&period=${mode}`}>
+              <Download size={14} /> {mode === "annual" ? "연간" : "분기"} CSV
+            </DownloadButton>
+            <Button size="sm" onClick={() => setPasteOpen(true)}>
+              <ClipboardPaste size={14} /> CSV·엑셀 붙여넣기
+            </Button>
+          </>
         }
       />
       <div className="flex flex-wrap items-end gap-3 px-4 pt-3">

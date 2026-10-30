@@ -102,3 +102,17 @@ export async function applyLesson(retroId: number, target: "principle" | "filter
   });
   return done();
 }
+
+export async function addMistakeTag(name: string): Promise<ActionResult> {
+  const n = name.trim();
+  if (!n || n.length > 50) return fail("태그 이름을 확인하세요.");
+  db.insert(schema.mistakeTags).values({ name: n }).onConflictDoNothing().run();
+  return done();
+}
+
+export async function deleteMistakeTag(id: number): Promise<ActionResult> {
+  const used = db.select().from(schema.retrospectiveTags).where(eq(schema.retrospectiveTags.tagId, id)).get();
+  if (used) return fail("복기에 쓰인 태그는 지울 수 없습니다.");
+  db.delete(schema.mistakeTags).where(eq(schema.mistakeTags.id, id)).run();
+  return done();
+}

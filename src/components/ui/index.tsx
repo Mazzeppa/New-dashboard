@@ -145,3 +145,20 @@ export function Table({ className, ...props }: React.TableHTMLAttributes<HTMLTab
     </div>
   );
 }
+
+/** API 라우트 파일 다운로드 버튼. Link를 쓰면 프리페치가 API를 호출하므로 일반 a 태그를 쓴다 */
+export function DownloadButton({ href, children, size = "md", variant = "secondary" }: { href: string; children: React.ReactNode; size?: "sm" | "md"; variant?: ButtonVariant }) {
+  return (
+    <a
+      href={href}
+      download
+      className={cn(
+        "inline-flex items-center justify-center gap-1.5 rounded-md font-medium transition",
+        size === "sm" ? "h-7 px-2.5 text-xs" : "h-9 px-3.5 text-sm",
+        buttonStyles[variant],
+      )}
+    >
+      {children}
+    </a>
+  );
+}

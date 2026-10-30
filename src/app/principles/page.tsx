@@ -5,6 +5,8 @@ import { getPrinciples, listPrincipleVersions } from "@/db/queries";
 import { diffPrinciples } from "@/domain/principles";
 
 export const dynamic = "force-dynamic";
+export const metadata = { title: "투자 원칙" };
+
 
 export default function PrinciplesPage() {
   const current = getPrinciples();
