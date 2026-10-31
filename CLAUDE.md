@@ -92,7 +92,7 @@ data/                   # SQLite 파일 (git 제외)
   - 매도로 이동할 때는 매도 사유가 필수이고, 탈락할 때는 탈락 사유가 필수다. 이 둘은 우회할 수 없다.
   - 신규 등록은 '아이디어' 또는 '보유'(기존 보유 종목)로 시작한다.
 - **게이트 우회**: 실패한 게이트 목록과 우회 사유를 `stage_transitions`에 남긴다. 대시보드와 복기 화면에 표시한다.
-- **게이트 컨텍스트**: `db/queries.ts`의 `getGateContext()`. 가치평가·메모·복기 테이블은 이후 개발 단계에서 생기므로, 그때 이 함수를 채운다. 그 전까지는 해당 게이트가 항상 실패한다.
+- **게이트 컨텍스트**: `db/queries.ts`의 `getGateContext()`가 가치평가 결과(`hasValuation`), 메모 완성·확정(`memoComplete`, `memoConfirmed`), final 복기(`hasRetrospective`)를 DB에서 읽어 `evaluateMove`에 넘긴다. 새 게이트 조건을 추가하면 이 함수와 `GateContext` 타입을 함께 고친다.
 - **탈락**: `stocks.rejectedFromStage`와 `rejectReason`. 복원하면 원래 단계로 돌아간다.
 - **1차 필터 항목**: 기록이 남은 항목은 삭제하지 않고 비활성화한다(과거 판단 보존). `autoKey`는 DART 자동 체크 연결용이다. `origin='lesson'`은 복기 교훈에서 온 항목이다.
 - **DB 연결은 지연 연결**: `db`는 Proxy이고 첫 쿼리 때 연결·마이그레이션한다. 모듈 최상위에서 쿼리 빌더를 호출하지 않는다(서브쿼리도 함수로 감싼다). `next build`가 여러 워커에서 모듈을 import할 때 마이그레이션이 경쟁해 빌드가 깨지기 때문이다.
