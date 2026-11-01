@@ -91,7 +91,7 @@ export const prices = sqliteTable(
     stockId: integer("stock_id").notNull().references(() => stocks.id, { onDelete: "cascade" }),
     date: text("date").notNull(),
     price: real("price").notNull(),
-    /** manual | 이후 추가될 provider 이름 */
+    /** manual | naver | yahoo. 같은 날짜에서는 manual이 우선한다 */
     source: text("source").notNull().default("manual"),
     createdAt: createdAt(),
   },
@@ -295,6 +295,8 @@ export const fxRates = sqliteTable(
     currency: text("currency").notNull(),
     date: text("date").notNull(),
     rateToKrw: real("rate_to_krw").notNull(),
+    /** manual | yahoo */
+    source: text("source").notNull().default("manual"),
     createdAt: createdAt(),
   },
   (t) => [index("fx_rates_currency_date_idx").on(t.currency, t.date)],

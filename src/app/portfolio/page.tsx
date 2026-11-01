@@ -7,6 +7,8 @@ import { formatAmount, formatNumber, formatPrice, formatRatio } from "@/domain/f
 import { STAGE_LABELS } from "@/domain/pipeline";
 import { buildPortfolio, krwRate } from "@/domain/portfolio";
 import { cn } from "@/lib/cn";
+import { PriceRefreshBar } from "@/components/price-refresh-bar";
+import { autoRefreshEnabled, lastRefresh, refreshDue } from "@/lib/server/price-refresh";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "포트폴리오" };
@@ -39,10 +41,11 @@ export default function PortfolioPage() {
         title="포트폴리오"
         description="원화 기준 환산. 비중은 현금을 포함한 총액 대비입니다. 한도는 투자 원칙에서 가져옵니다."
         actions={
-          <>
+          <div className="flex flex-wrap items-start justify-end gap-3">
+            <PriceRefreshBar last={lastRefresh()} autoDue={autoRefreshEnabled() && refreshDue()} />
             <DownloadButton href="/api/export/portfolio">보유 종목 CSV</DownloadButton>
             <DownloadButton href="/api/export/trades">매매 기록 CSV</DownloadButton>
-          </>
+          </div>
         }
       />
       <div className="flex flex-col gap-5">

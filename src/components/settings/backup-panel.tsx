@@ -67,7 +67,7 @@ export function BackupPanel({ schemaVersion, currentCounts }: { schemaVersion: n
       router.refresh();
     });
 
-  const versionMismatch = preview && preview.schemaVersion !== schemaVersion;
+  const versionMismatch = preview && preview.schemaVersion > schemaVersion;
 
   return (
     <Card id="backup">
@@ -148,7 +148,7 @@ export function BackupPanel({ schemaVersion, currentCounts }: { schemaVersion: n
             </table>
             {versionMismatch ? (
               <Alert tone="danger">
-                데이터 버전이 다릅니다 (백업 {preview.schemaVersion}, 현재 앱 {schemaVersion}). 같은 버전의 앱에서 만든 백업만 복원할 수 있습니다.
+                더 새 버전 앱의 백업입니다 (백업 {preview.schemaVersion}, 현재 앱 {schemaVersion}). 앱을 업데이트한 뒤 복원하세요.
               </Alert>
             ) : (
               <>

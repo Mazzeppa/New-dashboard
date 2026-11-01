@@ -62,7 +62,8 @@ src/
     review.ts           # 보유 점검·복기 스키마, 점검 주기, 2×2 분류, 촉매 일정, 복기 통계
     csv.ts              # CSV 생성 (BOM, 이스케이프)
   integrations/
-    price/              # PriceProvider 인터페이스 + ManualPriceProvider
+    price/normalize.ts  # (순수) 네이버·Yahoo 시세 응답 해석, Yahoo 심볼 규칙
+    price/index.ts      # (server-only) PriceProvider, 네이버·Yahoo 조회, 통화 검증
     dart/normalize.ts   # (순수) DART 계정 매핑, 1차 필터 자동 체크 판정
     dart/client.ts      # (server-only) DART API 호출, 고유번호 캐시, 재무제표·체크 수집
     sec/normalize.ts    # (순수) companyfacts → 연간·분기 값, us-gaap 태그 매핑
@@ -72,8 +73,10 @@ src/
     server/candidates.ts# 후보 일괄 등록 로직 (CSV 액션과 API 라우트 공용)
     server/financial-fetch.ts # API 수집 → financial_values 저장 정책, 수집 기록
     server/backup.ts    # 전체 백업·복원 (테이블 목록, 스키마 버전 확인)
+    server/price-refresh.ts # 현재가·환율 갱신, 하루 1회 자동 갱신 판단
+    pool.ts             # 동시 실행 제한
 tests/                  # domain/*, integrations/*/normalize 단위 테스트
-  fixtures/             # 실제 DART(삼성전자)·SEC(Apple) 응답을 줄인 것
+  fixtures/             # 실제 DART(삼성전자)·SEC(Apple)·네이버·Yahoo 응답을 줄인 것
 drizzle/                # 마이그레이션 SQL
 data/                   # SQLite 파일 (git 제외)
 ```
@@ -206,7 +209,7 @@ data/                   # SQLite 파일 (git 제외)
 - **백업·내보내기 (7단계)**:
   - **백업**: `GET /api/backup`이 `{ app, schemaVersion, exportedAt, counts, tables }` JSON을 준다. `schemaVersion`은 적용된 마이그레이션 수다. 테이블 목록은 `lib/server/backup.ts`의 `TABLES`(외래키 순서)이고, API 캐시(dart_corps, sec_tickers, kv)는 뺀다.
   - **새 테이블을 추가하면 반드시 `TABLES`에도 넣는다.** 넣지 않으면 백업에서 빠진다.
-  - **복원**: `POST /api/backup`. 같은 schemaVersion만 받는다. 복원 직전 상태를 `data/backups/pre-import-*.json`에 저장한 뒤, 한 트랜잭션에서 전부 지우고 다시 넣는다(`defer_foreign_keys`).
+  - **복원**: `POST /api/backup`. 현재 앱보다 새 버전의 백업만 거부하고, 예전 버전 백업은 받는다(없는 컬럼은 기본값, 없는 테이블은 빈 채로). **그래서 마이그레이션은 테이블·컬럼 추가만 한다.** 이름 변경이나 삭제가 필요하면 `importBackup`에 변환을 넣는다. 복원 직전 상태를 `data/backups/pre-import-*.json`에 저장한 뒤, 한 트랜잭션에서 전부 지우고 다시 넣는다(`defer_foreign_keys`).
     - 화면에서는 "복원"을 입력해야 실행된다.
     - Server Action 대신 Route Handler를 쓰는 이유는 본문 크기 제한(1MB) 때문이다.
   - **CSV**: `GET /api/export/[kind]`. UTF-8 BOM과 CRLF로 엑셀에서 한글이 깨지지 않는다. 금액은 원 단위 그대로다.
@@ -217,7 +220,19 @@ data/                   # SQLite 파일 (git 제외)
   - `app/error.tsx`, `not-found.tsx`, `loading.tsx`는 한국어다.
   - 종목 개요 맨 위의 `ProcessSummary`가 단계별 진행 상황을 한 줄로 보여 준다.
   - 휴대폰(390px)부터 데스크톱까지 문서 가로 넘침이 없어야 한다. 넓은 표는 카드 안에서만 가로로 스크롤한다.
-- **가격**: `PriceProvider` 인터페이스로 추상화했다. 지금은 수동 입력(`prices` 테이블)만 쓰고, 가장 최근 날짜의 가격을 현재가로 본다.
+- **시세 (현재가·환율 자동 조회)**:
+  - 한국 종목은 네이버 증권 모바일 API, 미국·유럽 종목과 환율(`{통화}KRW=X`)은 Yahoo Finance chart API를 쓴다. 둘 다 키가 없는 비공식 API이므로 응답 해석은 `integrations/price/normalize.ts`(순수, fixture 테스트)에만 둔다.
+  - 한국 종목은 네이버가 실패하면 Yahoo(.KS)로 넘어간다.
+  - 받은 통화가 종목 통화와 다르면 거부한다. 유럽 종목은 티커를 Yahoo 형식(NESN.SW 등)으로 입력해야 한다.
+  - 런던 펜스(GBp)는 파운드로 바꾼다. 날짜는 거래소 시간대 기준이다.
+  - `prices.source`와 `fx_rates.source`는 manual|naver|yahoo다. 같은 날짜면 manual이 우선한다(현재가 서브쿼리와 `latestFxRates`의 정렬).
+  - 자동 값은 (종목, 날짜, 출처)당 한 행만 두고, 다시 갱신하면 교체한다.
+  - `lib/server/price-refresh.ts`의 `refreshPrices`가 갱신한다.
+    - 대상은 아이디어~보유 단계 종목과, 그 종목·보유·현금 통화의 환율이다.
+    - 동시 실행 4개, 요청당 10초 제한이다. 전체 갱신은 전역 Promise로 중복 실행을 막는다.
+    - 결과와 시각은 `kv`(`prices_refreshed_at`, `prices_last_result`)에 남긴다.
+  - 자동 갱신: 대시보드·포트폴리오를 열 때 `PriceRefreshBar`가 오늘(한국 시각) 갱신 기록이 없으면 백그라운드로 한 번 실행한다. 설정에서 끌 수 있다(`kv.price_auto_refresh`). 종목 화면에는 그 종목만 가져오는 '지금 가져오기' 버튼이 있다.
+  - 새 시세 소스를 붙이려면 `PriceProvider`를 구현하고 `providersFor()`에 넣는다.
 - **후보 가져오기**: CSV(클라이언트에서 papaparse로 해석)와 `POST /api/candidates`가 같은 `candidateSchema`와 `importCandidates()`를 쓴다. 같은 시장·티커는 건너뛴다. 엑셀이 지운 한국 종목코드의 앞자리 0은 복구한다. `IMPORT_API_TOKEN`을 설정하면 Bearer 인증이 필요하다.
 - **확신도별 권장 범위**: 원칙에 저장한다(기본값: 확신도 k이면 비중 상한의 (k-1)×20% ~ k×20%).
 - **UI**: 한국어. 데스크톱 우선이고 md(768px) 이상에서 사이드바가 아이콘만 남는다. 다크모드는 next-themes의 class 방식이며, 색은 `globals.css`의 CSS 변수 토큰을 쓴다(`bg-surface`, `text-muted`, `text-danger` 등).

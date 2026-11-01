@@ -6,6 +6,8 @@ import { FilterItemsEditor } from "@/components/settings/filter-items-editor";
 import { MistakeTagsEditor } from "@/components/settings/mistake-tags-editor";
 import { listFilterItems, listMistakeTagsWithUsage, listTemplates } from "@/db/queries";
 import { countRows, schemaVersion } from "@/lib/server/backup";
+import { PriceSettings } from "@/components/settings/price-settings";
+import { autoRefreshEnabled } from "@/lib/server/price-refresh";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "설정" };
@@ -15,7 +17,7 @@ export default function SettingsPage() {
   const templates = listTemplates();
   return (
     <>
-      <PageHeader title="설정" description="체크리스트 항목, 템플릿, 실수 태그, 백업을 관리합니다. 환율과 현금은 포트폴리오 화면에서 입력합니다." />
+      <PageHeader title="설정" description="체크리스트 항목, 템플릿, 실수 태그, 시세, 백업을 관리합니다. 환율과 현금은 포트폴리오 화면에서 입력합니다." />
       <div className="flex max-w-4xl flex-col gap-5">
         <FilterItemsEditor items={listFilterItems()} />
         <Link href="/settings/templates">
@@ -30,6 +32,7 @@ export default function SettingsPage() {
           </Card>
         </Link>
         <MistakeTagsEditor tags={listMistakeTagsWithUsage()} />
+        <PriceSettings autoRefresh={autoRefreshEnabled()} />
         <BackupPanel schemaVersion={schemaVersion()} currentCounts={countRows()} />
       </div>
     </>

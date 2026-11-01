@@ -14,6 +14,8 @@ import { PIPELINE_STAGES, STAGE_LABELS } from "@/domain/pipeline";
 import { QUADRANTS, retroStats, reviewDue, upcomingCatalysts, type Quadrant } from "@/domain/review";
 import { displayName, isInWatchRange } from "@/domain/stock";
 import { today } from "@/lib/action";
+import { PriceRefreshBar } from "@/components/price-refresh-bar";
+import { autoRefreshEnabled, lastRefresh, refreshDue } from "@/lib/server/price-refresh";
 import { cn } from "@/lib/cn";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +43,11 @@ export default function DashboardPage() {
 
   return (
     <>
-      <PageHeader title="대시보드" description="프로세스를 지키고 있는지 한눈에 봅니다." />
+      <PageHeader
+        title="대시보드"
+        description="프로세스를 지키고 있는지 한눈에 봅니다."
+        actions={<PriceRefreshBar last={lastRefresh()} autoDue={autoRefreshEnabled() && refreshDue()} />}
+      />
 
       <Card className="mb-5">
         <CardHeader title="파이프라인" />

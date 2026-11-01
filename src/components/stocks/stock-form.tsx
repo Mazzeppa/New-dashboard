@@ -60,8 +60,12 @@ export function StockForm({
             ))}
           </Select>
         </Field>
-        <Field label="티커 / 종목코드" error={fe.ticker} hint="한국은 6자리 종목코드">
-          <Input name="ticker" defaultValue={initial?.ticker ?? ""} placeholder={market === "KR" ? "005930" : "AAPL"} />
+        <Field
+          label="티커 / 종목코드"
+          error={fe.ticker}
+          hint={market === "KR" ? "6자리 종목코드" : market === "US" ? "미국 티커 (예: AAPL, BRK.B)" : "Yahoo 형식: 티커.거래소 (예: NESN.SW, ASML.AS, SHEL.L)"}
+        >
+          <Input name="ticker" defaultValue={initial?.ticker ?? ""} placeholder={market === "KR" ? "005930" : market === "US" ? "AAPL" : "NESN.SW"} />
         </Field>
         <Field label="종목명" error={fe.name}>
           <Input name="name" defaultValue={initial?.name ?? ""} />

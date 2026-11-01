@@ -18,14 +18,15 @@ export function listPrincipleVersions() {
   return db.select().from(principleVersions).orderBy(desc(principleVersions.version)).all();
 }
 
-/** 종목별 최신 가격 (date 최신, 같은 날이면 나중에 입력한 것). 모듈 로드 시 DB를 열지 않도록 함수로 둔다 */
+/** 종목별 최신 가격. 모듈 로드 시 DB를 열지 않도록 함수로 둔다 */
 const latestPriceSubquery = () =>
   db
     .select({
       stockId: prices.stockId,
       price: prices.price,
       date: prices.date,
-      rn: sql<number>`row_number() over (partition by ${prices.stockId} order by ${prices.date} desc, ${prices.id} desc)`.as("rn"),
+      // 날짜 최신 → 같은 날이면 수동 입력 우선 → 나중에 들어온 것
+      rn: sql<number>`row_number() over (partition by ${prices.stockId} order by ${prices.date} desc, (${prices.source} = 'manual') desc, ${prices.id} desc)`.as("rn"),
     })
     .from(prices)
     .as("lp");
@@ -67,7 +68,12 @@ export function getStock(id: number): StockWithPrice | null {
 }
 
 export function listPrices(stockId: number) {
-  return db.select().from(prices).where(eq(prices.stockId, stockId)).orderBy(desc(prices.date), desc(prices.id)).all();
+  return db
+    .select()
+    .from(prices)
+    .where(eq(prices.stockId, stockId))
+    .orderBy(desc(prices.date), sql`(${prices.source} = 'manual') desc`, desc(prices.id))
+    .all();
 }
 
 export function listTransitions(stockId: number) {
@@ -231,11 +237,15 @@ export function listPositionPlans(stockId: number) {
   return db.select().from(schema.positionPlans).where(eq(schema.positionPlans.stockId, stockId)).orderBy(desc(schema.positionPlans.createdAt)).all();
 }
 
-/** 통화별 최신 환율 */
-export function latestFxRates(): Record<string, { rate: number; date: string }> {
-  const rows = db.select().from(schema.fxRates).orderBy(asc(schema.fxRates.date), asc(schema.fxRates.id)).all();
-  const out: Record<string, { rate: number; date: string }> = {};
-  for (const r of rows) out[r.currency] = { rate: r.rateToKrw, date: r.date };
+/** 통화별 최신 환율. 같은 날짜면 수동 입력이 우선한다 */
+export function latestFxRates(): Record<string, { rate: number; date: string; source: string }> {
+  const rows = db
+    .select()
+    .from(schema.fxRates)
+    .orderBy(asc(schema.fxRates.date), sql`(${schema.fxRates.source} = 'manual')`, asc(schema.fxRates.id))
+    .all();
+  const out: Record<string, { rate: number; date: string; source: string }> = {};
+  for (const r of rows) out[r.currency] = { rate: r.rateToKrw, date: r.date, source: r.source };
   return out;
 }
 

@@ -95,15 +95,17 @@ export interface ImportResult {
 
 /**
  * 백업으로 전체 데이터를 교체한다. 한 트랜잭션에서 지우고 다시 넣으므로 실패하면 그대로다.
- * 스키마 버전이 다르면(다른 버전 앱의 백업) 거부한다.
+ * 더 새 버전 앱의 백업은 거부한다. 예전 버전 백업은 받는다(마이그레이션이 추가만 하기 때문).
  */
 export function importBackup(raw: unknown): ImportResult {
   const parsed = backupSchema.safeParse(raw);
   if (!parsed.success) throw new Error(parsed.error.issues[0]?.message ?? "백업 파일 형식이 올바르지 않습니다.");
   const b = parsed.data;
   const current = schemaVersion();
-  if (b.schemaVersion !== current) {
-    throw new Error(`데이터 버전이 다릅니다 (백업 ${b.schemaVersion}, 현재 앱 ${current}). 같은 버전의 앱에서 만든 백업만 가져올 수 있습니다.`);
+  // 마이그레이션은 테이블·컬럼 추가만 하므로 예전 백업은 그대로 넣을 수 있다(없는 컬럼은 기본값, 없는 테이블은 빈 채로).
+  // 더 새 버전 앱의 백업은 모르는 컬럼이 있을 수 있어 거부한다.
+  if (b.schemaVersion > current) {
+    throw new Error(`더 새 버전 앱의 백업입니다 (백업 ${b.schemaVersion}, 현재 앱 ${current}). 앱을 업데이트한 뒤 복원하세요.`);
   }
   const known = new Set(TABLES.map(([n]) => n));
   const skippedTables = Object.keys(b.tables).filter((n) => !known.has(n));

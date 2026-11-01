@@ -168,7 +168,7 @@ function Overview({ stockId }: { stockId: number }) {
         </Card>
       </div>
       <div className="flex flex-col gap-5">
-        <PricePanel stockId={stock.id} currency={stock.currency} prices={listPrices(stock.id)} />
+        <PricePanel stockId={stock.id} currency={stock.currency} prices={listPrices(stock.id)} canFetch={!!stock.ticker} />
         <TagEditor stockId={stock.id} tags={stockTagNames(stock.id)} allTags={listTags().map((t) => t.name)} />
         <Card className="p-4">
           <p className="mb-2 text-xs text-muted">

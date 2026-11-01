@@ -1,0 +1,1 @@
+ALTER TABLE `fx_rates` ADD `source` text DEFAULT 'manual' NOT NULL;
