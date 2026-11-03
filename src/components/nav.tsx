@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { BookOpen, Columns3, LayoutDashboard, PieChart, Plus, Settings, Trash2, Upload } from "lucide-react";
+import { BookOpen, Columns3, LayoutDashboard, LogOut, PieChart, Plus, Settings, Trash2, Upload } from "lucide-react";
+import { logout } from "@/app/actions/auth";
 import { cn } from "@/lib/cn";
 import { ThemeToggle } from "./theme";
 
@@ -16,8 +17,9 @@ const NAV = [
   { href: "/settings", label: "설정", icon: Settings },
 ];
 
-export function Nav() {
+export function Nav({ authEnabled }: { authEnabled: boolean }) {
   const path = usePathname();
+  if (path === "/login") return null;
   const active = (href: string) => (href === "/" ? path === "/" : path.startsWith(href));
   return (
     <aside className="sticky top-0 z-20 flex shrink-0 items-center gap-1 border-b border-border bg-surface px-3 py-2 md:h-screen md:w-14 md:flex-col md:items-stretch md:border-r md:border-b-0 md:py-4 lg:w-52">
@@ -49,8 +51,20 @@ export function Nav() {
           </Link>
         ))}
       </nav>
-      <div className="ml-auto md:mt-auto md:ml-0">
+      <div className="ml-auto flex items-center gap-1 md:mt-auto md:ml-0 md:flex-col md:items-stretch">
         <ThemeToggle />
+        {authEnabled && (
+          <form action={logout}>
+            <button
+              type="submit"
+              className="inline-flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-muted hover:bg-surface-2"
+              aria-label="로그아웃"
+            >
+              <LogOut size={16} />
+              <span className="hidden lg:inline">로그아웃</span>
+            </button>
+          </form>
+        )}
       </div>
     </aside>
   );

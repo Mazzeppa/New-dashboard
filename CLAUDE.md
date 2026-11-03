@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-개인용 가치투자 프로세스 관리 웹앱. 종목이 0~8단계(아이디어 → 복기)를 차례로 통과하게 하고, 각 단계의 판단을 기록으로 남긴다. 단일 사용자, 로컬 실행 전용(인증 없음). 자동매매·주문 기능은 만들지 않는다.
+개인용 가치투자 프로세스 관리 웹앱. 종목이 0~8단계(아이디어 → 복기)를 차례로 통과하게 하고, 각 단계의 판단을 기록으로 남긴다. 단일 사용자. 내 PC에서 실행하거나(인증 없음), Railway에 배포해 비밀번호 로그인으로 쓴다(DEPLOY.md). 자동매매·주문 기능은 만들지 않는다.
 
 ## 명령어
 
@@ -24,6 +24,7 @@ npm run db:studio    # Drizzle Studio로 DB 열람
 src/
   app/                  # App Router 페이지
     actions/            # Server Actions ("use server"). 모든 데이터 변경은 여기서
+    login/              # 비밀번호 로그인 (APP_PASSWORD가 있을 때만)
     api/candidates/     # POST: 외부 후보 일괄 등록 (스크리너 연결 진입점)
     api/memos/[id]/markdown/ # GET: 투자 메모 마크다운 내보내기
     api/backup/         # GET: 전체 JSON 백업, POST: 복원
@@ -75,6 +76,8 @@ src/
     server/backup.ts    # 전체 백업·복원 (테이블 목록, 스키마 버전 확인)
     server/price-refresh.ts # 현재가·환율 갱신, 하루 1회 자동 갱신 판단
     pool.ts             # 동시 실행 제한
+    auth.ts             # 세션 토큰 서명·검증 (Web Crypto, 미들웨어 공용)
+  middleware.ts         # APP_PASSWORD가 있으면 로그인 강제
 tests/                  # domain/*, integrations/*/normalize 단위 테스트
   fixtures/             # 실제 DART(삼성전자)·SEC(Apple)·네이버·Yahoo 응답을 줄인 것
 drizzle/                # 마이그레이션 SQL
@@ -84,6 +87,14 @@ data/                   # SQLite 파일 (git 제외)
 ## 설계 결정
 
 - **스택**: Next.js 15 App Router + TypeScript + Tailwind v4, SQLite(better-sqlite3, 동기) + Drizzle, zod v4, @dnd-kit, Recharts, Vitest.
+- **better-sqlite3는 12.11.1로 고정한다.** 13.x는 미리 빌드한 파일을 패키지에 넣었지만 npm이 그래도 `node-gyp rebuild`를 실행해, Visual Studio가 없는 Windows PC에서 설치가 실패한다. 12.x는 `prebuild-install`로 Node 20~26용 파일을 내려받는다. 올리기 전에 Windows 설치를 확인할 것.
+- **배포 (Railway)**:
+  - `Dockerfile`(Node 22, 빌드 단계에 컴파일 도구)과 `railway.json`(헬스체크 `/login`)을 쓴다. DB는 `/data/app.db`이고, Railway에서 `/data`에 Volume을 붙여야 재배포 후에도 남는다.
+  - 순서는 `DEPLOY.md`에 있다.
+- **인증**:
+  - `APP_PASSWORD`가 있으면 `src/middleware.ts`가 로그인하지 않은 요청을 막는다(화면은 `/login`으로, API는 401). 없으면 인증 없이 동작한다(로컬).
+  - 세션은 서버 저장 없이 서명 토큰 쿠키(`vp_session` = 만료시각.HMAC-SHA256(APP_PASSWORD))를 쓰고 30일 유지된다. 비밀번호를 바꾸면 모든 세션이 무효가 된다(`lib/auth.ts`).
+  - 로그인 실패가 이어지면 응답을 지연한다. `POST /api/candidates`는 `IMPORT_API_TOKEN` Bearer로도 통과한다.
 - **계산·규칙은 `src/domain/`의 순수 함수**로만 만든다. Server Action과 화면은 호출만 한다. 새 계산(재무비율, DCF, 역DCF, 사이징)도 여기에 두고 테스트를 함께 쓴다.
 - **데이터 변경은 Server Actions**, 외부 연동만 Route Handler. 변경 후 `revalidatePath("/", "layout")`.
 - **저장 형식**: 시각은 ISO 문자열, 날짜는 `YYYY-MM-DD` 문자열. 금액은 원 단위(1원, 1달러) REAL과 통화 코드를 함께 둔다. 억원·$M 변환은 `domain/format.ts`에서 표시할 때만 한다.

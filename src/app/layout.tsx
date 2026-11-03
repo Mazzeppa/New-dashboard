@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="antialiased">
         <ThemeProvider>
           <div className="flex min-h-screen flex-col md:flex-row">
-            <Nav />
+            <Nav authEnabled={!!process.env.APP_PASSWORD} />
             <main className="min-w-0 flex-1 px-4 py-6 md:px-8">{children}</main>
           </div>
         </ThemeProvider>
